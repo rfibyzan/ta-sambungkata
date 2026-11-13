@@ -1,0 +1,23 @@
+# Dependensi
+node_modules/
+
+# Environment (jangan pernah di-commit)
+.env
+.env.*
+!.env.example
+
+# Build
+dist/
+build/
+.vercel/
+
+# Cache dataset mentah (diunduh ulang oleh scripts/build-kata.js)
+backend/scripts/.cache/
+
+# Log dan editor
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
