@@ -302,7 +302,13 @@ export async function detail(userId, gameId) {
   const sinkron = await sinkronWaktu(game);
   game = sinkron.game;
   const rantai = await gameModel.kataGame(game.id);
-  const durasiMs = game.finished_at ? new Date(game.finished_at) - new Date(game.started_at) : null;
+  // Game yang ditutup lewat batas waktu baru tercatat selesai saat server mengeceknya,
+  // jadi durasi dibatasi sampai deadline.
+  let durasiMs = null;
+  if (game.finished_at) {
+    const akhir = Math.min(new Date(game.finished_at).getTime(), new Date(game.deadline_at ?? game.finished_at).getTime());
+    durasiMs = Math.max(0, akhir - new Date(game.started_at).getTime());
+  }
   return {
     game: bentukState(game),
     durasi_ms: durasiMs,
