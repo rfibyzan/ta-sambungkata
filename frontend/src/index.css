@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+
+/* Token desain dari DESIGN.md. Jangan menambah warna di luar daftar ini. */
+@theme {
+  --color-bg: #f6f1e7;
+  --color-surface: #fffdf8;
+  --color-ink: #1e1b16;
+  --color-muted: #5f584d;
+  --color-line: #e4dbcb;
+  --color-line-strong: #968a74;
+  --color-skeleton: #e9e1d2;
+  --color-accent: #b43c17;
+  --color-accent-soft: #fbe3d8;
+  --color-accent-shadow: #7e2a10;
+  --color-teal: #1f6f68;
+  --color-teal-soft: #d7ece8;
+  --color-purple: #5b4bb7;
+  --color-purple-soft: #e4e0f7;
+  --color-gold: #e8b23a;
+  --color-gold-ink: #7a5a0e;
+
+  --font-head: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-key: 0 3px 0 var(--color-line);
+  --shadow-press: 0 4px 0 var(--color-accent-shadow);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-head);
+    font-weight: 700;
+  }
+  a[href],
+  button:not(:disabled),
+  summary,
+  select,
+  label[for],
+  [role='button'],
+  [role='tab'] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  input::placeholder {
+    color: var(--color-muted);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes muncul {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tekan {
+  50% {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--color-accent-shadow);
+  }
+}
+
+@keyframes kedip {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@utility animate-muncul {
+  animation: muncul 200ms ease-out both;
+}
+@utility animate-tekan {
+  animation: tekan 150ms ease-out;
+}
+@utility animate-kedip {
+  animation: kedip 1.4s ease-in-out infinite;
+}
