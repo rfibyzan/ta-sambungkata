@@ -106,6 +106,16 @@
   }
 }
 
+@keyframes kursor {
+  50% {
+    opacity: 0;
+  }
+}
+
+@utility animate-kursor {
+  animation: kursor 1s steps(1) infinite;
+}
+
 @utility animate-muncul {
   animation: muncul 200ms ease-out both;
 }

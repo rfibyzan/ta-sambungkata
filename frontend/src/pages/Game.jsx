@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowUp, Bot, ChevronRight, CircleAlert, Flag, Heart, HeartOff, Sparkles, Trophy, WifiOff } from 'lucide-react';
+import { Bot, ChevronRight, CircleAlert, CornerDownLeft, Delete, Flag, Heart, HeartOff, Sparkles, Trophy, WifiOff } from 'lucide-react';
 import { detail, kirimKata, selesaikan } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -128,6 +128,87 @@ function RantaiBot({ rantai, user, tingkat }) {
   );
 }
 
+// Ukuran keping mengecil saat kata makin panjang supaya tetap muat satu baris di HP.
+function ukuranKeping(jumlah) {
+  if (jumlah <= 5) return { ukuran: 'lg', kursor: 'h-16 w-14' };
+  if (jumlah <= 7) return { ukuran: 'md', kursor: 'h-12 w-10' };
+  return { ukuran: 'sm', kursor: 'h-9 w-8' };
+}
+
+// Tempat mengetik: huruf yang diketik langsung muncul sebagai keping setelah awalan.
+// Input asli tetap ada (transparan, menutupi kartu) supaya keyboard HP muncul saat kartu diketuk.
+function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo }) {
+  const [fokus, setFokus] = useState(false);
+  const huruf = [...awalan, ...isian];
+  const { ukuran, kursor } = ukuranKeping(huruf.length + 1);
+  const kata = `${awalan}${isian}`;
+  return (
+    <form onSubmit={onKirim} className="flex flex-col gap-3">
+      <section
+        aria-label="Ketik kata"
+        className={`relative flex flex-col items-center gap-4 rounded-[20px] border-2 bg-surface px-4 pt-5 pb-4 transition-colors ${fokus ? 'border-ink' : 'border-line'}`}
+      >
+        <p className="text-[13px] text-muted">
+          Ketik kata yang diawali <strong className="font-bold text-accent uppercase">{awalan}</strong>
+        </p>
+        <div className={`flex flex-wrap items-center justify-center gap-1.5 ${goyang ? 'animate-tekan' : ''}`} aria-hidden="true">
+          {huruf.map((h, i) => (
+            <LetterTile key={i} huruf={h} ukuran={ukuran} hot={i < awalan.length} />
+          ))}
+          <span className={`inline-flex shrink-0 items-center justify-center rounded-[10px] border-[1.5px] border-dashed border-line-strong ${kursor}`}>
+            {fokus && <span className="h-1/2 w-0.5 animate-kursor bg-accent" />}
+          </span>
+        </div>
+        <label htmlFor="isian-kata" className="sr-only">
+          Lanjutkan kata yang diawali {awalan}
+        </label>
+        <input
+          id="isian-kata"
+          ref={inputRef}
+          autoFocus
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="send"
+          maxLength={30}
+          value={isian}
+          readOnly={mengirim}
+          onFocus={() => setFokus(true)}
+          onBlur={() => setFokus(false)}
+          onChange={(e) => setIsian(e.target.value.replace(/[^a-zA-Z]/g, '').toLowerCase())}
+          className="absolute inset-0 size-full cursor-text rounded-[20px] text-base opacity-0"
+        />
+      </section>
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setIsian((s) => s.slice(0, -1));
+            inputRef.current?.focus();
+          }}
+          disabled={mengirim || !isian}
+          aria-label="Hapus huruf terakhir"
+          className="flex h-13 w-14 shrink-0 items-center justify-center rounded-[14px] border border-line-strong bg-surface hover:bg-bg disabled:opacity-40"
+        >
+          <Delete size={22} aria-hidden="true" />
+        </button>
+        <button
+          type="submit"
+          disabled={mengirim || !isian}
+          className="flex h-13 flex-1 items-center justify-center gap-2 rounded-[14px] bg-accent font-bold text-white shadow-[0_4px_0_var(--color-accent-shadow)] transition hover:brightness-110 active:translate-y-1 active:shadow-none disabled:bg-line-strong disabled:shadow-none"
+        >
+          {mengirim ? 'Mengirim...' : isian ? `Kirim ${kata}` : 'Ketik dulu'}
+          {!mengirim && isian && <CornerDownLeft size={18} aria-hidden="true" />}
+        </button>
+      </div>
+      <p className="text-center text-xs text-muted">
+        {solo ? 'Salah jawab mengurangi waktu 3 detik' : 'Salah jawab atau waktu habis mengurangi 1 nyawa'}
+      </p>
+    </form>
+  );
+}
+
 function Umpan({ umpan }) {
   if (!umpan) return null;
   const gaya = {
@@ -229,6 +310,21 @@ export default function Game() {
         sinkronUntuk.current = null;
       });
   }, [sisa, game, keHasil, terima]);
+
+  // Input selalu siap: jika fokus sempat pindah (mis. klik di luar kartu), ketikan huruf,
+  // Backspace, atau Enter langsung diarahkan kembali ke kartu ketik.
+  useEffect(() => {
+    if (konfirmasi) return undefined;
+    const tangkap = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!/^[a-zA-Z]$/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Enter') return;
+      const aktif = document.activeElement;
+      if (aktif === input.current || aktif?.matches?.('input, textarea, button, a, [contenteditable]')) return;
+      input.current?.focus();
+    };
+    window.addEventListener('keydown', tangkap);
+    return () => window.removeEventListener('keydown', tangkap);
+  }, [konfirmasi]);
 
   async function kirim(e) {
     e.preventDefault();
@@ -363,56 +459,18 @@ export default function Game() {
         </>
       )}
 
-      <section aria-label="Awalan yang harus disambung" className="flex flex-col items-center gap-3 rounded-[20px] border border-line bg-surface px-4 py-5">
-        <p className="text-[13px] text-muted">Kata berikutnya diawali</p>
-        <div className="flex items-center gap-2" role="img" aria-label={awalan}>
-          {[...awalan].map((h, i) => (
-            <LetterTile key={i} huruf={h} ukuran="lg" hot />
-          ))}
-          <span className="ml-1 h-1 w-7 rounded-full bg-line" aria-hidden="true" />
-          <span className="h-1 w-7 rounded-full bg-line" aria-hidden="true" />
-        </div>
-      </section>
+      <KepingKetik
+        awalan={awalan}
+        isian={isian}
+        setIsian={setIsian}
+        mengirim={mengirim}
+        goyang={goyang}
+        inputRef={input}
+        onKirim={kirim}
+        solo={solo}
+      />
 
       <Umpan umpan={umpan} />
-
-      <form onSubmit={kirim} className="flex items-center gap-2.5">
-        <label htmlFor="isian-kata" className="sr-only">
-          Lanjutkan kata yang diawali {awalan}
-        </label>
-        <div
-          className={`flex h-14 flex-1 items-center rounded-[14px] border-2 border-ink bg-surface px-4 focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ink ${goyang ? 'animate-[tekan_150ms]' : ''}`}
-        >
-          <span className="font-head text-xl font-bold text-accent" aria-hidden="true">
-            {awalan}
-          </span>
-          <input
-            id="isian-kata"
-            ref={input}
-            autoFocus
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="send"
-            value={isian}
-            onChange={(e) => setIsian(e.target.value.replace(/[^a-zA-Z]/g, '').toLowerCase())}
-            disabled={mengirim}
-            className="min-w-0 flex-1 bg-transparent font-head text-xl font-bold outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={mengirim || !isian}
-          aria-label="Kirim kata"
-          className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-ink text-white hover:bg-ink/90 active:translate-y-px disabled:opacity-40"
-        >
-          <ArrowUp size={24} aria-hidden="true" />
-        </button>
-      </form>
-      <p className="text-center text-xs text-muted">
-        {solo ? 'Salah jawab mengurangi waktu 3 detik' : 'Salah jawab atau waktu habis mengurangi 1 nyawa'}
-      </p>
 
       <Sheet
         terbuka={konfirmasi}

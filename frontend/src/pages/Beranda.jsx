@@ -11,6 +11,11 @@ import { DeretKeping } from '../components/LetterTile.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import { QuestCard } from '../components/QuestCard.jsx';
 import { Avatar, Pil, Progres } from '../components/ui.jsx';
+import StatistikRingkas from '../components/beranda/StatistikRingkas.jsx';
+import MainTerakhir from '../components/beranda/MainTerakhir.jsx';
+import PeringkatMingguan from '../components/beranda/PeringkatMingguan.jsx';
+import KepingLatar from '../components/beranda/KepingLatar.jsx';
+import { useLayar } from '../lib/useLayar.js';
 
 function KataHariIni() {
   const { data, error, memuat, ulang } = useMuat(kataHariIni);
@@ -105,8 +110,10 @@ function QuestHariIni() {
 export default function Beranda() {
   const { user } = useAuth();
   const lv = progresLevel(user.xp, user.level);
+  const layarLebar = useLayar('(min-width: 1024px)');
   return (
     <div className="flex flex-col gap-6">
+      <KepingLatar />
       <header className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <p className="text-[13px] text-muted">{sapaan()},</p>
@@ -139,6 +146,15 @@ export default function Beranda() {
         </div>
         <QuestHariIni />
       </div>
+
+      <StatistikRingkas userId={user.id} />
+
+      {layarLebar && (
+        <div className="grid grid-cols-2 gap-6 xl:grid-cols-[1fr_420px]">
+          <MainTerakhir />
+          <PeringkatMingguan userId={user.id} />
+        </div>
+      )}
     </div>
   );
 }
