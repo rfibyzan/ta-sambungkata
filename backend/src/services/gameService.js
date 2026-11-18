@@ -141,9 +141,11 @@ async function cekKunciMati(game, kata, terpakai, urutan) {
 async function giliranBot(game, kataTerakhir, terpakai, urutan) {
   const pilihan = await botService.pilihKata(game, sambungan(kataTerakhir), terpakai);
   if (!pilihan) return null;
-  const baris = await gameModel.tambahKata({ game_id: game.id, kata_id: pilihan.id, urutan: urutan + 1, pemain: 'bot' });
   terpakai.push(pilihan.id);
-  const reset = await cekKunciMati(game, pilihan.kata, terpakai, urutan + 1);
+  const [baris, reset] = await Promise.all([
+    gameModel.tambahKata({ game_id: game.id, kata_id: pilihan.id, urutan: urutan + 1, pemain: 'bot' }),
+    cekKunciMati(game, pilihan.kata, terpakai, urutan + 1),
+  ]);
   if (reset) await gameModel.ubahKata(baris.id, { kunci_mati: true });
   return {
     kata: pilihan,
@@ -154,8 +156,46 @@ async function giliranBot(game, kataTerakhir, terpakai, urutan) {
   };
 }
 
+// Setelah kata user diterima: kata acak baru jika kunci mati, giliran bot (mode bot),
+// lalu simpan state game.
+async function lanjutkanRantai(game, kataUser, kunciMati, terpakai, urutan, perubahan) {
+  let kataTerakhir = kataUser;
+  let kataAcakBaru = null;
+  if (kunciMati) {
+    kataAcakBaru = await kataPembuka(terpakai);
+    urutan += 1;
+    terpakai.push(kataAcakBaru.id);
+    await gameModel.tambahKata({ game_id: game.id, kata_id: kataAcakBaru.id, urutan, pemain: 'sistem' });
+    kataTerakhir = kataAcakBaru.kata;
+  }
+
+  let balasanBot = null;
+  let botKalah = false;
+  if (game.mode === 'bot') {
+    const jawaban = await giliranBot(game, kataTerakhir, terpakai, urutan);
+    if (!jawaban) {
+      botKalah = true;
+    } else {
+      balasanBot = { kata: jawaban.kata, kunci_mati: jawaban.kunci_mati, kata_acak_baru: jawaban.kata_acak_baru };
+      kataTerakhir = jawaban.kata_terakhir;
+      perubahan.deadline_at = new Date(Date.now() + BOT.DURASI_GILIRAN_MS).toISOString();
+    }
+  }
+
+  const baru = await gameModel.ubah(game.id, { ...perubahan, kata_terakhir: kataTerakhir });
+  return { game: baru, kataAcakBaru, balasanBot, botKalah };
+}
+
+// Setiap query ke Supabase memakan ±200 ms karena jarak jaringan. Query yang tidak saling
+// bergantung dijalankan bersamaan supaya pemain tidak menunggu lama setelah menekan kirim.
 export async function kirimKata(userId, gameId, input) {
-  let game = await ambilMilik(userId, gameId);
+  const kata = String(input ?? '').trim().toLowerCase();
+  const [gameAwal, daftar, barisKamus] = await Promise.all([
+    ambilMilik(userId, gameId),
+    gameModel.kataGame(gameId),
+    /^[a-z]+$/.test(kata) ? kataModel.cariKata(kata) : null,
+  ]);
+  let game = gameAwal;
   if (game.status !== 'berjalan') throw badRequest('Game sudah selesai');
 
   const sinkron = await sinkronWaktu(game);
@@ -171,14 +211,12 @@ export async function kirimKata(userId, gameId, input) {
     };
   }
 
-  const kata = String(input ?? '').trim().toLowerCase();
   const awalan = sambungan(game.kata_terakhir);
-  const daftar = await gameModel.kataGame(game.id);
   const terpakai = daftar.map((w) => w.kata.id);
   const terakhir = daftar.at(-1);
 
   let salah = validasiFormat(kata, awalan);
-  const baris = salah ? null : await kataModel.cariKata(kata);
+  const baris = salah ? null : barisKamus;
   if (!salah && !baris) salah = { alasan: 'tidak_ada', pesan: `"${kata}" tidak ada di kamus` };
   if (!salah && terpakai.includes(baris.id)) salah = { alasan: 'sudah_dipakai', pesan: `"${kata}" sudah dipakai di game ini` };
 
@@ -197,13 +235,14 @@ export async function kirimKata(userId, gameId, input) {
   // Jawaban benar: hitung poin.
   const sekarang = Date.now();
   const cepat = sekarang - new Date(terakhir.created_at).getTime() < BATAS_JAWAB_CEPAT_MS;
-  const unlock = await unlockModel.cari(userId, baris.id);
-  const baru = !unlock;
-  if (baru) await unlockModel.buka(userId, baris.id);
-  else await unlockModel.tambahPemakaian(userId, baris.id, unlock.jumlah_dipakai);
-
   terpakai.push(baris.id);
-  const kunciMati = !(await kataModel.adaSambungan(sambungan(baris.kata), terpakai));
+  const [unlock, adaLanjutan, muatanQuest] = await Promise.all([
+    unlockModel.cari(userId, baris.id),
+    kataModel.adaSambungan(sambungan(baris.kata), terpakai),
+    questService.muatProgres(userId),
+  ]);
+  const baru = !unlock;
+  const kunciMati = !adaLanjutan;
   const rincian = {
     huruf: baris.panjang * SKOR.PER_HURUF,
     kata_baru: baru ? SKOR.KATA_BARU : 0,
@@ -212,51 +251,28 @@ export async function kirimKata(userId, gameId, input) {
   };
   const poin = Object.values(rincian).reduce((a, b) => a + b, 0);
 
-  let urutan = terakhir.urutan + 1;
-  await gameModel.tambahKata({
-    game_id: game.id,
-    kata_id: baris.id,
-    urutan,
-    pemain: 'user',
-    poin,
-    baru,
-    kunci_mati: kunciMati,
-  });
-
-  let kataTerakhir = baris.kata;
-  let kataAcakBaru = null;
-  if (kunciMati) {
-    kataAcakBaru = await kataPembuka(terpakai);
-    urutan += 1;
-    await gameModel.tambahKata({ game_id: game.id, kata_id: kataAcakBaru.id, urutan, pemain: 'sistem' });
-    terpakai.push(kataAcakBaru.id);
-    kataTerakhir = kataAcakBaru.kata;
-  }
-
-  const perubahan = { skor: game.skor + poin, jumlah_kata: game.jumlah_kata + 1, kata_terakhir: kataTerakhir };
-  const questSelesai = await questService.catat(userId, {
-    jenis: 'kata',
-    baru,
-    awalan: baris.kata.slice(0, 2),
-    panjang: baris.panjang,
-    jumlahKata: perubahan.jumlah_kata,
-  });
-
-  // Mode bot: bot langsung menjawab.
-  let balasanBot = null;
-  let botKalah = false;
-  if (game.mode === 'bot') {
-    const jawaban = await giliranBot(game, kataTerakhir, terpakai, urutan);
-    if (!jawaban) {
-      botKalah = true;
-    } else {
-      balasanBot = { kata: jawaban.kata, kunci_mati: jawaban.kunci_mati, kata_acak_baru: jawaban.kata_acak_baru };
-      perubahan.kata_terakhir = jawaban.kata_terakhir;
-      perubahan.deadline_at = new Date(Date.now() + BOT.DURASI_GILIRAN_MS).toISOString();
-    }
-  }
-
-  game = await gameModel.ubah(game.id, perubahan);
+  const urutan = terakhir.urutan + 1;
+  const jumlahKata = game.jumlah_kata + 1;
+  const [, , questSelesai, rantai] = await Promise.all([
+    gameModel.tambahKata({
+      game_id: game.id,
+      kata_id: baris.id,
+      urutan,
+      pemain: 'user',
+      poin,
+      baru,
+      kunci_mati: kunciMati,
+    }),
+    baru ? unlockModel.buka(userId, baris.id) : unlockModel.tambahPemakaian(userId, baris.id, unlock.jumlah_dipakai),
+    questService.catat(
+      userId,
+      { jenis: 'kata', baru, awalan: baris.kata.slice(0, 2), panjang: baris.panjang, jumlahKata },
+      muatanQuest,
+    ),
+    lanjutkanRantai(game, baris.kata, kunciMati, terpakai, urutan, { skor: game.skor + poin, jumlah_kata: jumlahKata }),
+  ]);
+  const { kataAcakBaru, balasanBot, botKalah } = rantai;
+  game = rantai.game;
   if (botKalah) {
     const hasil = await akhiri(game, 'menang');
     game = hasil.game;

@@ -22,8 +22,19 @@ function acakBerbibit(daftar, bibit) {
   return hasil;
 }
 
+// Quest harian tidak berubah setelah dibuat, jadi disimpan di memori per tanggal
+// supaya tidak perlu query ulang di setiap kata yang dikirim.
+let cacheHarian = { tanggal: null, data: null };
+
 // Quest dibuat secara lazy pada request pertama di hari itu (tanpa cron).
 export async function pastikanHariIni(tanggal = tanggalWib()) {
+  if (cacheHarian.tanggal === tanggal) return cacheHarian.data;
+  const hasil = await muatHarian(tanggal);
+  if (hasil.length >= QUEST_PER_HARI) cacheHarian = { tanggal, data: hasil };
+  return hasil;
+}
+
+async function muatHarian(tanggal) {
   let harian = await questModel.harian(tanggal);
   if (harian.length >= QUEST_PER_HARI) return harian.slice(0, QUEST_PER_HARI);
 
@@ -113,10 +124,17 @@ function progresBaru(quest, p) {
   return sekarang;
 }
 
-// Dipanggil dari gameService. Mengembalikan quest yang baru saja selesai.
-export async function catat(userId, peristiwa) {
+// Quest hari ini beserta progres user. Bisa dipanggil lebih awal oleh gameService
+// supaya berjalan bersamaan dengan query lain.
+export async function muatProgres(userId) {
   const harian = await pastikanHariIni();
   const progres = await questModel.progresUser(userId, harian.map((h) => h.id));
+  return { harian, progres };
+}
+
+// Dipanggil dari gameService. Mengembalikan quest yang baru saja selesai.
+export async function catat(userId, peristiwa, muatan = null) {
+  const { harian, progres } = muatan ?? (await muatProgres(userId));
   const simpan = [];
   const baruSelesai = [];
 

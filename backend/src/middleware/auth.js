@@ -5,9 +5,11 @@ async function userDariToken(req) {
   const header = req.headers.authorization ?? '';
   const [skema, token] = header.split(' ');
   if (skema !== 'Bearer' || !token) return null;
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return null;
-  return { id: data.user.id, email: data.user.email };
+  // getClaims memverifikasi tanda tangan JWT di backend memakai kunci publik Supabase
+  // (disimpan setelah diambil sekali), jadi tidak perlu bertanya ke server Auth di setiap request.
+  const { data, error } = await supabase.auth.getClaims(token);
+  if (error || !data?.claims?.sub) return null;
+  return { id: data.claims.sub, email: data.claims.email };
 }
 
 // Wajib login: tolak dengan 401 jika token tidak ada atau tidak valid.
