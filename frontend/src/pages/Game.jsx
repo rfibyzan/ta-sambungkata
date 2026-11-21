@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Bot, ChevronRight, CircleAlert, CornerDownLeft, Delete, Flag, Sparkles, Trophy, WifiOff } from 'lucide-react';
+import { Bot, ChevronRight, CircleAlert, Flag, Sparkles, Trophy, WifiOff } from 'lucide-react';
 import { detail, kirimKata, selesaikan } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -10,6 +10,8 @@ import StateView from '../components/StateView.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import KartuLawan from '../components/game/KartuLawan.jsx';
 import KilatanTepi from '../components/game/KilatanTepi.jsx';
+import KeyboardLayar from '../components/game/KeyboardLayar.jsx';
+import { hapusHuruf, MAKS_HURUF, tambahHuruf } from '../lib/keyboardLayar.js';
 import { Avatar, Sheet, Tombol } from '../components/ui.jsx';
 import { jadwalTampilBot, PER_HURUF_MS } from '../lib/jadwalTampilBot.js';
 import { pisahTertunda } from '../lib/rantaiTertunda.js';
@@ -18,6 +20,8 @@ import { useLayar } from '../lib/useLayar.js';
 const DURASI = { solo: 60000, bot: 15000 };
 const ALASAN_KALAH_MS = 1500;
 const LAMA_TANDA_MERAH_MS = 1000;
+const LAMA_UMPAN_MS = 3000;
+const LAMA_NYALA_MS = 120;
 
 // Ubah respons API menjadi item rantai untuk ditampilkan.
 const item = (kata, pemain, extra = {}) => ({ kata: kata.kata, pemain, ...extra });
@@ -62,7 +66,7 @@ function CincinWaktu({ sisaMs, potong }) {
   const keliling = 2 * Math.PI * r;
   const rasio = Math.max(0, Math.min(1, sisaMs / DURASI.solo));
   return (
-    <div className="relative mx-auto size-[150px]" role="timer" aria-live="off" aria-label={`Sisa waktu ${detik} detik`}>
+    <div className="relative mx-auto size-[100px] shrink-0 sm:size-[128px]" role="timer" aria-live="off" aria-label={`Sisa waktu ${detik} detik`}>
       <svg viewBox="0 0 150 150" className="size-full -rotate-90" aria-hidden="true">
         <circle cx="75" cy="75" r={r} fill="none" strokeWidth="9" className="stroke-line" />
         <circle
@@ -78,8 +82,8 @@ function CincinWaktu({ sisaMs, potong }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`font-head text-[52px] leading-none font-extrabold ${detik <= 10 ? 'text-accent' : ''}`}>{detik}</span>
-        <span className="text-xs text-muted">detik</span>
+        <span className={`font-head text-[34px] leading-none font-extrabold sm:text-[44px] ${detik <= 10 ? 'text-accent' : ''}`}>{detik}</span>
+        <span className="text-[11px] text-muted">detik</span>
       </div>
       {potong && (
         <span key={potong.kunci} aria-hidden="true" className="absolute top-3 -right-2 animate-jatuh font-head text-xl font-extrabold text-accent">
@@ -130,7 +134,7 @@ function RantaiBot({ rantai, user, tingkat, kurangiGerak }) {
     ujung.current?.scrollIntoView({ block: 'nearest' });
   }, [rantai.length]);
   return (
-    <section aria-label="Rantai kata" className="max-h-[260px] overflow-y-auto rounded-[20px] border border-line bg-surface p-3.5">
+    <section aria-label="Rantai kata" className="h-full overflow-y-auto rounded-[16px] border border-line bg-surface p-3">
       <ol className="flex flex-col gap-2">
         {rantai.map((w, i) => {
           if (w.pemain === 'sistem') {
@@ -162,26 +166,31 @@ function RantaiBot({ rantai, user, tingkat, kurangiGerak }) {
 }
 
 // Ukuran keping mengecil saat kata makin panjang supaya tetap muat satu baris di HP.
+// Kartu ketik dibuat pendek supaya keyboard muat; kata panjang memakai keping paling kecil.
 function ukuranKeping(jumlah) {
-  if (jumlah <= 5) return { ukuran: 'lg', kursor: 'h-16 w-14' };
-  if (jumlah <= 7) return { ukuran: 'md', kursor: 'h-12 w-10' };
-  return { ukuran: 'sm', kursor: 'h-9 w-8' };
+  if (jumlah <= 6) return { ukuran: 'md', kursor: 'h-12 w-10', celah: 'gap-1.5' };
+  if (jumlah <= 9) return { ukuran: 'sm', kursor: 'h-9 w-8', celah: 'gap-1.5' };
+  return { ukuran: 'sm', kecil: 'h-7 w-[22px] rounded-[6px] text-sm', kursor: 'h-7 w-[22px] rounded-[6px]', celah: 'gap-1' };
 }
 
-// Tempat mengetik: huruf yang diketik langsung muncul sebagai keping setelah awalan.
-// Input asli tetap ada (transparan, menutupi kartu) supaya keyboard HP muncul saat kartu diketuk.
-function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo, terkunci }) {
+// Tempat mengetik: huruf yang diketik muncul sebagai keping setelah awalan, lalu keyboard aplikasi.
+// Input asli tetap ada (transparan, inputMode none) untuk keyboard fisik dan pembaca layar,
+// tanpa memunculkan keyboard bawaan HP.
+function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo, terkunci, labelKirim, menyala }) {
   const [fokus, setFokus] = useState(false);
   const huruf = [...awalan, ...isian];
-  const { ukuran, kursor } = ukuranKeping(huruf.length + 1);
-  const kata = `${awalan}${isian}`;
+  const { ukuran, kursor, celah, kecil = '' } = ukuranKeping(huruf.length + 1);
+  const ketik = (fn) => {
+    if (mengirim || terkunci) return;
+    setIsian(fn);
+  };
   return (
-    <form onSubmit={onKirim} className="flex flex-col gap-3">
+    <form onSubmit={onKirim} className="flex shrink-0 flex-col gap-2.5 sm:gap-3">
       <section
         aria-label="Ketik kata"
-        className={`relative flex flex-col items-center gap-4 rounded-[20px] border-2 bg-surface px-4 pt-5 pb-4 transition-colors ${fokus ? 'border-ink' : 'border-line'}`}
+        className={`relative flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-[16px] border-2 bg-surface px-3 py-2.5 transition-colors sm:min-h-[100px] ${fokus ? 'border-ink' : 'border-line'}`}
       >
-        <p className="text-[13px] text-muted">
+        <p className="text-xs text-muted">
           {terkunci ? (
             terkunci
           ) : (
@@ -190,16 +199,16 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
             </>
           )}
         </p>
-        <div className={`flex flex-wrap items-center justify-center gap-1.5 ${goyang ? 'animate-tekan' : ''}`} aria-hidden="true">
+        <div className={`flex flex-wrap items-center justify-center ${celah} ${goyang ? 'animate-tekan' : ''}`} aria-hidden="true">
           {huruf.map((h, i) => (
-            <LetterTile key={i} huruf={h} ukuran={ukuran} hot={i < awalan.length} className={i < awalan.length ? '' : 'animate-letak'} />
+            <LetterTile key={i} huruf={h} ukuran={ukuran} hot={i < awalan.length} className={`${kecil} ${i < awalan.length ? '' : 'animate-letak'}`} />
           ))}
           <span className={`inline-flex shrink-0 items-center justify-center rounded-[10px] border-[1.5px] border-dashed border-line-strong ${kursor}`}>
             {fokus && <span className="h-1/2 w-0.5 animate-kursor bg-accent" />}
           </span>
         </div>
         <label htmlFor="isian-kata" className="sr-only">
-          {terkunci || `Lanjutkan kata yang diawali ${awalan}`}
+          {terkunci || `Lanjutkan kata yang diawali ${awalan}. ${solo ? 'Salah jawab mengurangi waktu 3 detik.' : 'Salah jawab atau waktu habis mengurangi 1 nyawa.'}`}
         </label>
         <input
           id="isian-kata"
@@ -210,7 +219,8 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
           autoCorrect="off"
           spellCheck={false}
           enterKeyHint="send"
-          maxLength={30}
+          inputMode="none"
+          maxLength={MAKS_HURUF}
           value={isian}
           // readOnly, bukan disabled: input disabled kehilangan fokus dan keyboard HP tertutup
           // setiap giliran bot. Kiriman tetap diblokir di kirim() selama giliran bot.
@@ -222,31 +232,14 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
           className="absolute inset-0 size-full cursor-text rounded-[20px] text-base opacity-0"
         />
       </section>
-      <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          onClick={() => {
-            setIsian((s) => s.slice(0, -1));
-            inputRef.current?.focus();
-          }}
-          disabled={mengirim || !isian || Boolean(terkunci)}
-          aria-label="Hapus huruf terakhir"
-          className="flex h-13 w-14 shrink-0 items-center justify-center rounded-[14px] border border-line-strong bg-surface hover:bg-bg disabled:opacity-40"
-        >
-          <Delete size={22} aria-hidden="true" />
-        </button>
-        <button
-          type="submit"
-          disabled={mengirim || !isian || Boolean(terkunci)}
-          className="flex h-13 flex-1 items-center justify-center gap-2 rounded-[14px] bg-accent font-bold text-white shadow-[0_4px_0_var(--color-accent-shadow)] transition hover:brightness-110 active:translate-y-1 active:shadow-none disabled:bg-line-strong disabled:shadow-none"
-        >
-          {mengirim ? 'Mengirim...' : isian ? `Kirim ${kata}` : 'Ketik dulu'}
-          {!mengirim && isian && <CornerDownLeft size={18} aria-hidden="true" />}
-        </button>
-      </div>
-      <p className="text-center text-xs text-muted">
-        {solo ? 'Salah jawab mengurangi waktu 3 detik' : 'Salah jawab atau waktu habis mengurangi 1 nyawa'}
-      </p>
+      <KeyboardLayar
+        onHuruf={(h) => ketik((s) => tambahHuruf(s, h))}
+        onHapus={() => ketik(hapusHuruf)}
+        bisaKirim={!mengirim && Boolean(isian) && !terkunci}
+        labelKirim={labelKirim}
+        terkunci={terkunci}
+        menyala={menyala}
+      />
     </form>
   );
 }
@@ -261,7 +254,7 @@ function Umpan({ umpan }) {
   }[umpan.jenis];
   const Ikon = { sukses: Sparkles, salah: CircleAlert, info: WifiOff, tunggu: Bot }[umpan.jenis];
   return (
-    <div role="status" className={`flex animate-muncul items-start gap-2.5 rounded-[14px] px-3.5 py-2.5 ${gaya}`}>
+    <div role="status" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex animate-muncul items-start gap-2.5 rounded-[12px] px-3 py-2 shadow-[0_2px_0_var(--color-line)] ${gaya}`}>
       <Ikon size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
       <div className="flex flex-col gap-0.5">
         <p className="font-head text-sm font-bold">{umpan.judul}</p>
@@ -289,6 +282,9 @@ export default function Game() {
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [goyang, setGoyang] = useState(false);
   const [potong, setPotong] = useState(null);
+  // Tombol keyboard layar yang menyala sesaat saat tombol fisiknya ditekan.
+  const [menyala, setMenyala] = useState(null);
+  const padamkan = useRef(null);
   // Giliran bot: null (giliranmu) atau { fase: 'berpikir' | 'keping' | 'alasan' | 'kalah', teks? }.
   const [statusBot, setStatusBot] = useState(null);
   // pukulan naik setiap nyawa berkurang dan memutar ulang animasinya; tandaMerah menandai kartu Kamu.
@@ -340,6 +336,13 @@ export default function Game() {
     },
     [jadwalkan],
   );
+
+  // Umpan balik melayang di atas rantai, lalu hilang sendiri supaya kata terbaru terlihat lagi.
+  useEffect(() => {
+    if (!umpan) return undefined;
+    const t = setTimeout(() => setUmpan(null), LAMA_UMPAN_MS);
+    return () => clearTimeout(t);
+  }, [umpan]);
 
   // Fokus kembali ke kolom jawaban setelah input tidak lagi terkunci (setelah render).
   useEffect(() => {
@@ -425,6 +428,9 @@ export default function Game() {
     const tangkap = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (!/^[a-zA-Z]$/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Enter') return;
+      setMenyala(e.key.toLowerCase());
+      clearTimeout(padamkan.current);
+      padamkan.current = setTimeout(() => setMenyala(null), LAMA_NYALA_MS);
       const aktif = document.activeElement;
       if (aktif === input.current || aktif?.matches?.('input, textarea, button, a, [contenteditable]')) return;
       input.current?.focus();
@@ -520,22 +526,26 @@ export default function Game() {
   const detikGiliran = Math.max(0, Math.ceil((sisa ?? DURASI.bot) / 1000));
   const kritis = !solo && detikGiliran <= 5;
   const terkunci = statusBot ? (statusBot.fase === 'kalah' ? 'Game selesai' : 'Tunggu bot selesai menjawab') : null;
+  const labelKirim = mengirim ? 'Mengirim...' : statusBot ? (statusBot.fase === 'kalah' ? 'Game selesai' : 'Giliran bot') : 'Kirim';
 
+  // Setinggi layar: bagian rantai menyusut dan bergulir di dalam kotaknya, sisanya tetap terlihat.
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex items-center justify-between gap-2">
+    <div className="flex h-full flex-col gap-2.5 px-3 pt-2 pb-[max(10px,env(safe-area-inset-bottom))] sm:gap-3 sm:px-4 sm:pt-4 sm:pb-5">
+      <header className="flex shrink-0 items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setKonfirmasi(true)}
-          className="inline-flex h-11 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3.5 text-[13px] font-bold hover:bg-bg"
+          aria-label="Menyerah"
+          title="Menyerah"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-line-strong bg-surface hover:bg-bg sm:size-11"
         >
-          <Flag size={16} aria-hidden="true" /> Menyerah
+          <Flag size={18} aria-hidden="true" />
         </button>
         <div className="flex flex-col items-center text-center">
           <span className="text-[11px] font-bold text-muted">{solo ? 'Mode Solo' : `Lawan Bot · ${game.tingkat === 'sulit' ? 'Sulit' : 'Mudah'}`}</span>
           <span className="text-sm font-semibold">{game.jumlah_kata} kata</span>
         </div>
-        <span className="inline-flex h-11 items-center gap-1.5 rounded-full bg-ink px-3.5 text-white" aria-label={`Skor ${game.skor}`}>
+        <span className="inline-flex h-10 items-center gap-1.5 rounded-full bg-ink px-3.5 text-white sm:h-11" aria-label={`Skor ${game.skor}`}>
           <Trophy size={14} className="text-gold" aria-hidden="true" />
           <span className="font-head text-[15px] font-bold">{game.skor}</span>
         </span>
@@ -544,7 +554,10 @@ export default function Game() {
       {solo ? (
         <>
           <CincinWaktu sisaMs={sisa ?? DURASI.solo} potong={potong} />
-          <RantaiSolo rantai={rantai} />
+          <div className="relative min-h-0 flex-1">
+            <RantaiSolo rantai={rantai} />
+            <Umpan umpan={umpan} />
+          </div>
         </>
       ) : (
         <>
@@ -560,16 +573,16 @@ export default function Game() {
             kurangiGerak={kurangiGerak}
           />
           {statusBot ? (
-            <p className="flex h-[38px] items-end text-[13px] font-bold text-muted">{statusBot.fase === 'kalah' ? 'Game selesai' : 'Giliran bot'}</p>
+            <p className="flex h-[30px] shrink-0 items-center text-[13px] font-bold text-muted">{statusBot.fase === 'kalah' ? 'Game selesai' : 'Giliran bot'}</p>
           ) : (
-            <div className="flex flex-col gap-1.5" role="timer" aria-label={`Sisa waktu giliran ${detikGiliran} detik`}>
+            <div className="flex h-[30px] shrink-0 flex-col justify-center gap-1" role="timer" aria-label={`Sisa waktu giliran ${detikGiliran} detik`}>
               <div className={`flex justify-between text-[13px] font-bold ${kritis ? 'text-accent' : ''}`}>
                 <span className="text-accent">Giliranmu</span>
                 <span key={kritis ? detikGiliran : 'normal'} className={`font-head ${kritis ? 'animate-denyut' : ''}`}>
                   0:{String(detikGiliran).padStart(2, '0')}
                 </span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-line" aria-hidden="true">
+              <div className="h-1.5 overflow-hidden rounded-full bg-line" aria-hidden="true">
                 <div
                   className={`h-full rounded-full transition-[width] duration-200 ${kritis ? 'bg-accent' : 'bg-ink'}`}
                   style={{ width: `${Math.max(0, Math.min(100, ((sisa ?? 0) / DURASI.bot) * 100))}%` }}
@@ -577,7 +590,10 @@ export default function Game() {
               </div>
             </div>
           )}
-          <RantaiBot rantai={rantai} user={user} tingkat={game.tingkat} kurangiGerak={kurangiGerak} />
+          <div className="relative min-h-0 flex-1">
+            <RantaiBot rantai={rantai} user={user} tingkat={game.tingkat} kurangiGerak={kurangiGerak} />
+            <Umpan umpan={umpan} />
+          </div>
           <p className="sr-only" aria-live="polite">
             {pengumuman}
           </p>
@@ -594,9 +610,9 @@ export default function Game() {
         onKirim={kirim}
         solo={solo}
         terkunci={terkunci}
+        labelKirim={labelKirim}
+        menyala={menyala}
       />
-
-      <Umpan umpan={umpan} />
 
       <Sheet
         terbuka={konfirmasi}

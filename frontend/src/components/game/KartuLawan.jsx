@@ -35,15 +35,15 @@ export default function KartuLawan({ user, nyawa, tingkat, giliran, statusBot, p
   const bingkaiKamu = tandaMerah ? 'border-2 border-accent bg-accent-soft' : giliran === 'kamu' ? 'border-2 border-ink bg-surface' : 'border border-line bg-transparent';
   const bingkaiBot = giliran === 'bot' ? 'border-2 border-ink bg-surface' : 'border border-line bg-transparent';
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-2">
       <div className="relative flex-1">
         <div
           key={`kamu-${pukulan}`}
-          className={`flex items-center gap-2.5 rounded-[14px] p-3 transition-colors ${bingkaiKamu} ${pukulan && tandaMerah && !kurangiGerak ? 'animate-getar' : ''}`}
+          className={`flex min-h-[52px] items-center gap-2 rounded-[12px] px-2.5 py-2 transition-colors ${bingkaiKamu} ${pukulan && tandaMerah && !kurangiGerak ? 'animate-getar' : ''}`}
         >
-          <Avatar user={user} ukuran={36} />
-          <div className="flex flex-col gap-1">
-            <span className="text-[13px] font-bold">Kamu</span>
+          <Avatar user={user} ukuran={28} />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[13px] leading-tight font-bold">Kamu</span>
             <HatiNyawa jumlah={nyawa} pukulan={pukulan} />
           </div>
         </div>
@@ -58,13 +58,13 @@ export default function KartuLawan({ user, nyawa, tingkat, giliran, statusBot, p
           </span>
         )}
       </div>
-      <span className="font-head text-sm font-extrabold text-muted">VS</span>
-      <div className={`flex min-h-[64px] flex-1 items-center gap-2.5 rounded-[14px] p-3 transition-colors ${bingkaiBot}`}>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-white" aria-hidden="true">
-          <Bot size={18} />
+      <span className="font-head text-xs font-extrabold text-muted">VS</span>
+      <div className={`flex min-h-[52px] flex-1 items-center gap-2 rounded-[12px] px-2.5 py-2 transition-colors ${bingkaiBot}`}>
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-ink text-white" aria-hidden="true">
+          <Bot size={15} />
         </span>
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[13px] font-bold">Bot {tingkat === 'sulit' ? 'Sulit' : 'Mudah'}</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[13px] leading-tight font-bold">Bot {tingkat === 'sulit' ? 'Sulit' : 'Mudah'}</span>
           {statusBot?.fase === 'berpikir' && <TitikBerpikir kurangiGerak={kurangiGerak} />}
           {statusBot?.teks && <span className="text-xs leading-snug font-semibold text-accent">{statusBot.teks}</span>}
         </div>

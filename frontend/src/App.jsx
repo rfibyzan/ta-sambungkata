@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import { AppLayout, FokusLayout } from './components/Layout.jsx';
+import { AppLayout, FokusLayout, GameLayout } from './components/Layout.jsx';
 import Masuk from './pages/Masuk.jsx';
 import Beranda from './pages/Beranda.jsx';
 import PilihMode from './pages/PilihMode.jsx';
@@ -47,8 +47,10 @@ export default function App() {
       <JudulTab />
       <Routes>
         <Route path="/masuk" element={<Masuk />} />
-        <Route element={<FokusLayout />}>
+        <Route element={<GameLayout />}>
           <Route path="/main/:gameId" element={<Game />} />
+        </Route>
+        <Route element={<FokusLayout />}>
           <Route path="/main/hasil/:gameId" element={<HasilGame />} />
         </Route>
         <Route element={<AppLayout />}>

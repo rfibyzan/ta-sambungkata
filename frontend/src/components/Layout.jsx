@@ -28,6 +28,17 @@ export function FokusLayout() {
   );
 }
 
+// Layar game: setinggi layar tanpa padding luar, supaya keyboard dan semua komponen muat tanpa scroll.
+export function GameLayout() {
+  return (
+    <WajibLogin>
+      <main className="mx-auto h-dvh w-full max-w-[560px]">
+        <Outlet />
+      </main>
+    </WajibLogin>
+  );
+}
+
 function WajibLogin({ children }) {
   const { user, memuat } = useAuth();
   const lokasi = useLocation();
