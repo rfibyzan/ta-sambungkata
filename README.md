@@ -36,18 +36,6 @@ Semua validasi kata dan perhitungan skor dilakukan di server. Waktu dihitung dar
 - Akun: daftar, masuk, ganti username dan foto profil (dipotong menjadi 256 x 256 di perangkat sebelum diunggah), statistik, dan halaman Tentang Aplikasi.
 - PWA: bisa dipasang di HP, punya manifest, ikon, dan service worker.
 
-## Ketentuan Tugas Akhir
-
-| Ketentuan | Di aplikasi ini |
-|---|---|
-| API buatan sendiri (Modul 1) | Backend Express di `backend/`. Frontend tidak mengakses Supabase secara langsung, termasuk untuk login; semua data lewat endpoint di bawah. |
-| Bottom Navigation Bar | Beranda, Main, Kamusku, Peringkat, Profil. Di layar lebar berubah menjadi sidebar. |
-| Minimal 5 halaman | Lihat tabel Halaman di bawah. |
-| 2 halaman list dengan detail | Kamusku ke Detail Kata, dan Peringkat ke Detail Pemain. Riwayat ke Detail Game dan Quest ke Detail Quest juga mengikuti pola yang sama. |
-| Halaman Profile/About | Profil dan Tentang Aplikasi. |
-| Source code di GitHub | Repositori ini. |
-| PWA di free hosting | Frontend dan backend di Vercel. |
-
 ## Halaman
 
 | Route | Halaman |

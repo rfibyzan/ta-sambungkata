@@ -91,7 +91,7 @@ export default function EditProfil() {
   const pesan = error || (usernameBerubah && !formatValid ? '3 sampai 20 karakter: huruf kecil, angka, titik, atau garis bawah' : cek && !cek.tersedia ? cek.pesan : null);
 
   return (
-    <form onSubmit={simpan} noValidate className="flex max-w-[480px] flex-col gap-6">
+    <form onSubmit={simpan} noValidate className="mx-auto flex w-full max-w-[480px] flex-col gap-6">
       <HeaderDetail judul="Edit Profil" kembaliKe="/profil" />
       <h1 className="sr-only">Edit profil</h1>
 
