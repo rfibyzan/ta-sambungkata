@@ -10,6 +10,8 @@ router.param('id', uuidParam('id', 'Pemain tidak ditemukan'));
 
 router.get('/:id', user.profil);
 router.put('/:id', wajibLogin, user.ubah);
+router.put('/:id/avatar', wajibLogin, user.ubahAvatar);
+router.delete('/:id/avatar', wajibLogin, user.hapusAvatar);
 router.get('/:id/kamus', wajibLogin, kamus.daftar);
 router.get('/:id/kamus/:kataId', wajibLogin, kamus.detail);
 

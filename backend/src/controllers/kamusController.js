@@ -26,28 +26,29 @@ export async function daftar(req, res) {
   const { search, huruf } = bacaFilter(req.query);
   const paginasi = bacaPaginasi(req.query, { limitDefault: 30, limitMaks: 60 });
 
-  let data;
-  let total;
-  if (search) {
-    const hasil = await unlockModel.cariMilik(userId, { search, huruf, ...paginasi });
-    data = hasil.data.map((u) => terbuka(u.kata, u));
-    total = hasil.total;
-  } else {
-    const hasil = await kataModel.daftar({ huruf, ...paginasi });
-    const unlock = await unlockModel.dariId(userId, hasil.data.map((k) => k.id));
-    data = hasil.data.map((k) => {
-      const u = unlock.find((x) => x.kata_id === k.id);
-      return u ? terbuka(k, u) : terkunci(k);
-    });
-    total = hasil.total;
-  }
-
-  const [terkumpul, totalKata, terkumpulHuruf, totalHuruf] = await Promise.all([
+  // Tanpa search: semua kata, yang sudah terbuka di depan (RPC kamus_user). Total diambil
+  // dari hitungan kata, bukan dari baris yang kembali, supaya halaman di luar batas tetap
+  // mendapat total yang benar.
+  const [hasilCari, barisKamus, terkumpul, totalKata, terkumpulHuruf, totalHuruf] = await Promise.all([
+    search ? unlockModel.cariMilik(userId, { search, huruf, ...paginasi }) : null,
+    search ? null : unlockModel.kamusUser(userId, { huruf, dari: paginasi.dari, limit: paginasi.limit }),
     unlockModel.hitungMilik(userId),
     kataModel.hitung(),
     huruf ? unlockModel.hitungMilik(userId, { huruf }) : null,
     huruf ? kataModel.hitung({ huruf }) : null,
   ]);
+
+  let data;
+  let total;
+  if (search) {
+    data = hasilCari.data.map((u) => terbuka(u.kata, u));
+    total = hasilCari.total;
+  } else {
+    data = barisKamus.map(({ pertama_unlock, jumlah_dipakai, ...k }) =>
+      pertama_unlock ? terbuka(k, { pertama_unlock, jumlah_dipakai }) : terkunci(k),
+    );
+    total = huruf ? totalHuruf : totalKata;
+  }
 
   res.json({
     data,

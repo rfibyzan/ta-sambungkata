@@ -1,6 +1,29 @@
 import * as userModel from '../models/userModel.js';
+import * as avatarModel from '../models/avatarModel.js';
 import { profilPublik, POLA_USERNAME } from './authController.js';
+import { bacaGambarAvatar } from '../utils/avatar.js';
 import { badRequest, forbidden, notFound } from '../utils/httpError.js';
+
+function pastikanPemilik(req) {
+  if (req.params.id !== req.user.id) throw forbidden('Kamu hanya bisa mengubah profilmu sendiri');
+}
+
+// PUT /users/:id/avatar (hanya pemilik): body { gambar: "data:image/webp;base64,..." }.
+export async function ubahAvatar(req, res) {
+  pastikanPemilik(req);
+  const gambar = bacaGambarAvatar(req.body?.gambar);
+  const avatarUrl = await avatarModel.unggah(req.user.id, gambar);
+  const user = await userModel.ubah(req.user.id, { avatar_url: avatarUrl });
+  res.json(profilPublik(user));
+}
+
+// DELETE /users/:id/avatar (hanya pemilik): kembali ke avatar inisial.
+export async function hapusAvatar(req, res) {
+  pastikanPemilik(req);
+  await avatarModel.hapus(req.user.id);
+  const user = await userModel.ubah(req.user.id, { avatar_url: null });
+  res.json(profilPublik(user));
+}
 
 // GET /users/:id (publik): profil + statistik.
 export async function profil(req, res) {
@@ -12,7 +35,7 @@ export async function profil(req, res) {
 
 // PUT /users/:id (hanya pemilik): ubah username dan/atau avatar_url.
 export async function ubah(req, res) {
-  if (req.params.id !== req.user.id) throw forbidden('Kamu hanya bisa mengubah profilmu sendiri');
+  pastikanPemilik(req);
   const perubahan = {};
 
   if (req.body?.username !== undefined) {

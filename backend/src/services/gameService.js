@@ -11,6 +11,9 @@ import {
   BATAS_JAWAB_CEPAT_MS,
   MIN_SAMBUNGAN_PEMBUKA,
   TOLERANSI_MS,
+  akhirJedaBot,
+  jadwalBot,
+  sisaJedaMs,
 } from '../config/gameRules.js';
 import { badRequest, forbidden, notFound, HttpError } from '../utils/httpError.js';
 
@@ -129,11 +132,18 @@ async function hukum(game) {
 
 // Setelah sebuah kata masuk, cek kunci mati. Jika tidak ada sambungan lagi, rantai
 // dimulai ulang dengan kata acak (pemain 'sistem').
-async function cekKunciMati(game, kata, terpakai, urutan) {
+// createdAt diisi untuk kunci mati buatan bot, supaya kata acak baru ikut muncul setelah jeda bot.
+async function cekKunciMati(game, kata, terpakai, urutan, createdAt) {
   const ada = await kataModel.adaSambungan(sambungan(kata), terpakai);
   if (ada) return null;
   const acak = await kataPembuka(terpakai);
-  await gameModel.tambahKata({ game_id: game.id, kata_id: acak.id, urutan: urutan + 1, pemain: 'sistem' });
+  await gameModel.tambahKata({
+    game_id: game.id,
+    kata_id: acak.id,
+    urutan: urutan + 1,
+    pemain: 'sistem',
+    ...(createdAt ? { created_at: createdAt } : {}),
+  });
   terpakai.push(acak.id);
   return acak;
 }
@@ -142,12 +152,19 @@ async function giliranBot(game, kataTerakhir, terpakai, urutan) {
   const pilihan = await botService.pilihKata(game, sambungan(kataTerakhir), terpakai);
   if (!pilihan) return null;
   terpakai.push(pilihan.id);
+  // Dua jadwal dengan waktu berpikir yang sama: kunci mati baru diketahui setelah query,
+  // dan query itu jalan bersamaan dengan insert supaya tidak menambah waktu tunggu.
+  const r = Math.random();
+  const dasar = { sekarang: Date.now(), panjang: pilihan.kata.length, acak: () => r };
+  const biasa = jadwalBot({ ...dasar, kunciMati: false });
+  const km = jadwalBot({ ...dasar, kunciMati: true });
   const [baris, reset] = await Promise.all([
-    gameModel.tambahKata({ game_id: game.id, kata_id: pilihan.id, urutan: urutan + 1, pemain: 'bot' }),
-    cekKunciMati(game, pilihan.kata, terpakai, urutan + 1),
+    gameModel.tambahKata({ game_id: game.id, kata_id: pilihan.id, urutan: urutan + 1, pemain: 'bot', created_at: biasa.created_at }),
+    cekKunciMati(game, pilihan.kata, terpakai, urutan + 1, km.created_at),
   ]);
-  if (reset) await gameModel.ubahKata(baris.id, { kunci_mati: true });
+  if (reset) await gameModel.ubahKata(baris.id, { kunci_mati: true, created_at: km.created_at });
   return {
+    jadwal: reset ? km : biasa,
     kata: pilihan,
     kunci_mati: Boolean(reset),
     kata_acak_baru: reset,
@@ -170,20 +187,26 @@ async function lanjutkanRantai(game, kataUser, kunciMati, terpakai, urutan, peru
   }
 
   let balasanBot = null;
-  let botKalah = false;
+  let botKalahAwalan = null;
   if (game.mode === 'bot') {
     const jawaban = await giliranBot(game, kataTerakhir, terpakai, urutan);
     if (!jawaban) {
-      botKalah = true;
+      botKalahAwalan = sambungan(kataTerakhir);
     } else {
-      balasanBot = { kata: jawaban.kata, kunci_mati: jawaban.kunci_mati, kata_acak_baru: jawaban.kata_acak_baru };
+      balasanBot = {
+        kata: jawaban.kata,
+        kunci_mati: jawaban.kunci_mati,
+        kata_acak_baru: jawaban.kata_acak_baru,
+        jeda_ms: jawaban.jadwal.jeda_ms,
+        berpikir_ms: jawaban.jadwal.berpikir_ms,
+      };
       kataTerakhir = jawaban.kata_terakhir;
-      perubahan.deadline_at = new Date(Date.now() + BOT.DURASI_GILIRAN_MS).toISOString();
+      perubahan.deadline_at = jawaban.jadwal.deadline_at;
     }
   }
 
   const baru = await gameModel.ubah(game.id, { ...perubahan, kata_terakhir: kataTerakhir });
-  return { game: baru, kataAcakBaru, balasanBot, botKalah };
+  return { game: baru, kataAcakBaru, balasanBot, botKalah: botKalahAwalan !== null, botKalahAwalan };
 }
 
 // Setiap query ke Supabase memakan ±200 ms karena jarak jaringan. Query yang tidak saling
@@ -197,6 +220,9 @@ export async function kirimKata(userId, gameId, input) {
   ]);
   let game = gameAwal;
   if (game.status !== 'berjalan') throw badRequest('Game sudah selesai');
+  // Kata bot belum selesai tampil. Bukan jawaban salah, jadi tanpa penalti.
+  const akhirJeda = akhirJedaBot(daftar);
+  if (akhirJeda && sisaJedaMs(akhirJeda, Date.now()) > 0) throw new HttpError(409, 'Tunggu giliran bot selesai');
 
   const sinkron = await sinkronWaktu(game);
   if (sinkron.timeout) {
@@ -271,7 +297,7 @@ export async function kirimKata(userId, gameId, input) {
     ),
     lanjutkanRantai(game, baris.kata, kunciMati, terpakai, urutan, { skor: game.skor + poin, jumlah_kata: jumlahKata }),
   ]);
-  const { kataAcakBaru, balasanBot, botKalah } = rantai;
+  const { kataAcakBaru, balasanBot, botKalah, botKalahAwalan } = rantai;
   game = rantai.game;
   if (botKalah) {
     const hasil = await akhiri(game, 'menang');
@@ -290,6 +316,7 @@ export async function kirimKata(userId, gameId, input) {
     kata_acak_baru: kataAcakBaru,
     balasan_bot: balasanBot,
     bot_menyerah: botKalah,
+    bot_kalah_awalan: botKalahAwalan,
     game: bentukState(game),
     selesai: game.status !== 'berjalan',
     quest_selesai: questSelesai,

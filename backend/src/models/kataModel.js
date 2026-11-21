@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabaseClient.js';
 import { cekSupabase } from '../utils/httpError.js';
+import { hasilHalaman } from '../utils/paginasi.js';
 
 const KOLOM = 'id, kata, jenis, makna, contoh, huruf_awal, panjang';
 
@@ -9,8 +10,7 @@ export async function daftar({ search, huruf, dari, sampai, ids }) {
   if (huruf) q = q.eq('huruf_awal', huruf);
   if (ids) q = q.in('id', ids);
   const { data, error, count } = await q.range(dari, sampai);
-  cekSupabase({ data, error });
-  return { data, total: count ?? 0 };
+  return hasilHalaman({ data, error, count });
 }
 
 export async function cariId(id) {

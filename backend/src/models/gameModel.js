@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabaseClient.js';
 import { cekSupabase } from '../utils/httpError.js';
+import { hasilHalaman } from '../utils/paginasi.js';
 
 const KOLOM_GAME =
   'id, user_id, mode, tingkat, skor, jumlah_kata, nyawa, status, kata_terakhir, started_at, deadline_at, finished_at';
@@ -32,8 +33,7 @@ export async function daftarMilik(userId, { dari, sampai }) {
     .neq('status', 'berjalan')
     .order('started_at', { ascending: false })
     .range(dari, sampai);
-  cekSupabase({ data, error });
-  return { data, total: count ?? 0 };
+  return hasilHalaman({ data, error, count });
 }
 
 export async function kataGame(gameId) {

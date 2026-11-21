@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabaseClient.js';
 import { cekSupabase } from '../utils/httpError.js';
+import { hasilHalaman } from '../utils/paginasi.js';
 
 export async function cari(userId, kataId) {
   return cekSupabase(
@@ -38,6 +39,13 @@ export async function dariId(userId, kataIds) {
   );
 }
 
+// Semua kata (opsional per huruf), kata milik user di depan. pertama_unlock null berarti terkunci.
+export async function kamusUser(userId, { huruf, dari, limit }) {
+  return cekSupabase(
+    await supabase.rpc('kamus_user', { p_user: userId, p_huruf: huruf ?? null, p_offset: dari, p_limit: limit }),
+  );
+}
+
 export async function cariMilik(userId, { search, huruf, dari, sampai }) {
   let q = supabase
     .from('unlocked_words')
@@ -48,8 +56,7 @@ export async function cariMilik(userId, { search, huruf, dari, sampai }) {
   if (search) q = q.ilike('kata.kata', `${search}%`);
   if (huruf) q = q.eq('kata.huruf_awal', huruf);
   const { data, error, count } = await q.order('kata(kata)').range(dari, sampai);
-  cekSupabase({ data, error });
-  return { data, total: count ?? 0 };
+  return hasilHalaman({ data, error, count });
 }
 
 export async function hitungMilik(userId, { huruf } = {}) {

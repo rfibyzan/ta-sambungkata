@@ -1,3 +1,5 @@
+import { cekSupabase } from './httpError.js';
+
 // Membaca ?page dan ?limit dengan batas aman.
 export function bacaPaginasi(query, { limitDefault = 20, limitMaks = 50 } = {}) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -8,4 +10,16 @@ export function bacaPaginasi(query, { limitDefault = 20, limitMaks = 50 } = {}) 
 
 export function metaPaginasi({ page, limit }, total) {
   return { page, limit, total, total_halaman: Math.max(1, Math.ceil(total / limit)) };
+}
+
+// Hasil query berpaginasi (count: 'exact' + range). Halaman di luar batas membuat PostgREST
+// membalas 416 (PGRST103). Itu bukan kesalahan server, jadi kembalikan data kosong dan total
+// asli dari pesannya supaya frontend bisa menjepit ke halaman terakhir.
+export function hasilHalaman({ data, error, count }) {
+  if (error?.code === 'PGRST103') {
+    const total = Number(/only (\d+) rows/.exec(error.details ?? '')?.[1] ?? 0);
+    return { data: [], total };
+  }
+  cekSupabase({ data, error });
+  return { data, total: count ?? 0 };
 }
