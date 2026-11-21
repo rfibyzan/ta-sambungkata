@@ -32,11 +32,11 @@ export default function Paginasi({ halaman, totalHalaman, onPindah, label, ringk
   return (
     <nav
       aria-label={label}
-      className="sticky bottom-[calc(max(12px,env(safe-area-inset-bottom))+68px)] z-20 -mx-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line bg-bg/95 px-4 py-2.5 backdrop-blur sm:bottom-0 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12"
+      className="sticky bottom-[calc(max(12px,env(safe-area-inset-bottom))+68px)] z-20 -mx-4 flex items-center justify-center border-t border-line bg-bg/95 px-4 py-2.5 backdrop-blur sm:bottom-0 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12"
     >
-      {/* Di HP jumlah data sudah tampil di atas daftar; bilah cukup satu baris. */}
-      {ringkasan && <p className="hidden text-[13px] text-muted sm:block">{ringkasan}</p>}
-      <div className="mx-auto flex items-center gap-3 sm:mr-0 sm:ml-auto">
+      {/* Kontrol di tengah. Jumlah data (Riwayat) di kiri dan hanya di layar lebar. */}
+      {ringkasan && <p className="absolute top-1/2 left-8 hidden -translate-y-1/2 text-[13px] text-muted lg:left-12 lg:block">{ringkasan}</p>}
+      <div className="flex items-center gap-3">
         <button type="button" onClick={() => onPindah(halaman - 1)} disabled={halaman <= 1} aria-label="Halaman sebelumnya" className={panah}>
           <ChevronLeft size={20} aria-hidden="true" />
         </button>

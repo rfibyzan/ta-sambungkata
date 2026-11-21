@@ -243,7 +243,9 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, form
   );
 }
 
-function Umpan({ umpan }) {
+// bawah: di Solo rantai ada di atas area ini, jadi umpan ditaruh di bawah supaya rantai tidak tertutup.
+// Di Lawan Bot kata terbaru ada di bawah kotak rantai, jadi umpan di atas.
+function Umpan({ umpan, bawah = false }) {
   if (!umpan) return null;
   const gaya = {
     sukses: 'bg-teal-soft text-teal',
@@ -253,7 +255,7 @@ function Umpan({ umpan }) {
   }[umpan.jenis];
   const Ikon = { sukses: Sparkles, salah: CircleAlert, info: WifiOff, tunggu: Bot }[umpan.jenis];
   return (
-    <div role="status" className={`pointer-events-none absolute inset-x-2 top-2 z-10 flex animate-muncul items-start gap-2.5 rounded-[12px] px-3 py-2 shadow-[0_2px_0_var(--color-line)] ${gaya}`}>
+    <div role="status" className={`pointer-events-none absolute inset-x-2 ${bawah ? 'bottom-2' : 'top-2'} z-10 flex animate-muncul items-start gap-2.5 rounded-[12px] px-3 py-2 shadow-[0_2px_0_var(--color-line)] ${gaya}`}>
       <Ikon size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
       <div className="flex flex-col gap-0.5">
         <p className="font-head text-sm font-bold">{umpan.judul}</p>
@@ -559,7 +561,7 @@ export default function Game() {
           <CincinWaktu sisaMs={sisa ?? DURASI.solo} potong={potong} />
           <div className="relative min-h-0 flex-1">
             <RantaiSolo rantai={rantai} />
-            <Umpan umpan={umpan} />
+            <Umpan umpan={umpan} bawah />
           </div>
         </>
       ) : (

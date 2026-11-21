@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, AtSign, CircleAlert, CircleCheck, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { ArrowRight, BookOpen, Bot, CircleAlert, CircleCheck, Eye, EyeOff, Lock, Mail, Timer, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { cekUsername } from '../api/auth.js';
 import { pesanError } from '../api/axios.js';
@@ -37,6 +37,85 @@ function Kolom({ label, ikon: Ikon, error, bantuan, sukses, kanan, ...input }) {
         </p>
       )}
     </div>
+  );
+}
+
+// Keping huruf di panel gelap. sambung: huruf yang menyambung ke kata sebelum atau sesudahnya.
+function KataKeping({ kata, sambung = [], kecil = false }) {
+  return (
+    <span className={`flex ${kecil ? 'gap-1' : 'gap-1.5'}`} aria-hidden="true">
+      {[...kata].map((h, i) => (
+        <span
+          key={i}
+          className={`flex items-center justify-center rounded-[22%] border font-head font-extrabold uppercase ${
+            kecil ? 'size-7 text-sm shadow-[0_3px_0_var(--shadow)]' : 'size-12 text-2xl shadow-[0_5px_0_var(--shadow)]'
+          } ${
+            sambung.includes(i)
+              ? 'border-accent-shadow bg-accent text-white [--shadow:var(--color-accent-shadow)]'
+              : 'border-white/15 bg-white/10 text-[#f3ede2] [--shadow:rgb(0_0_0/0.45)]'
+          }`}
+        >
+          {h}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const FITUR = [
+  [Timer, 'Solo 60 detik', 'Sambung sebanyak mungkin'],
+  [Bot, 'Lawan Bot', 'Bergantian 15 detik, 3 nyawa'],
+  [BookOpen, 'Kamusku', 'Koleksi dari 10.000 kata KBBI'],
+];
+
+// Laptop: panel kiri menunjukkan cara bermain. HP: pita ringkas di atas formulir.
+function PanelPermainan() {
+  return (
+    <>
+      <aside className="hidden flex-col justify-between gap-10 bg-ink px-16 py-14 text-[#f3ede2] lg:flex">
+        <p className="flex items-center gap-3">
+          <img src="/favicon.svg" width="48" height="48" alt="" className="size-12" />
+          <span className="font-head text-2xl font-extrabold">SambungKata</span>
+        </p>
+        <div className="flex flex-col gap-10">
+          <p className="max-w-[560px] font-head text-[38px] leading-[1.15] font-extrabold text-balance">
+            Sambung kata dari dua huruf terakhir. Kumpulkan setiap kata yang kamu temukan.
+          </p>
+          <div className="flex flex-col gap-4" role="img" aria-label="Contoh rantai: buku, kursi, siang">
+            <div className="flex flex-wrap gap-6">
+              <KataKeping kata="buku" sambung={[2, 3]} />
+              <KataKeping kata="kursi" sambung={[0, 1, 3, 4]} />
+            </div>
+            <KataKeping kata="siang" sambung={[0, 1]} />
+            <p className="text-[13px] text-white/60">"ku" dan "si" menjadi awal kata berikutnya</p>
+          </div>
+        </div>
+        <ul className="flex flex-col gap-4">
+          {FITUR.map(([Ikon, judul, ket]) => (
+            <li key={judul} className="flex items-center gap-4">
+              <span className="flex size-10 items-center justify-center rounded-[10px] bg-white/10 text-gold" aria-hidden="true">
+                <Ikon size={20} />
+              </span>
+              <span className="flex flex-col">
+                <span className="text-[15px] font-bold">{judul}</span>
+                <span className="text-[13px] text-white/60">{ket}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+      <div className="flex flex-col gap-4 bg-ink px-5 pt-6 pb-5 text-[#f3ede2] lg:hidden">
+        <p className="flex items-center gap-2.5">
+          <img src="/favicon.svg" width="36" height="36" alt="" className="size-9" />
+          <span className="font-head text-xl font-extrabold">SambungKata</span>
+        </p>
+        <div className="flex flex-wrap gap-3.5" role="img" aria-label="Contoh rantai: buku, kursi">
+          <KataKeping kata="buku" sambung={[2, 3]} kecil />
+          <KataKeping kata="kursi" sambung={[0, 1]} kecil />
+        </div>
+        <p className="text-xs text-white/60">Sambung dari dua huruf terakhir</p>
+      </div>
+    </>
   );
 }
 
@@ -113,13 +192,13 @@ export default function Masuk() {
   const daftarMode = mode === 'daftar';
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col gap-7 px-5 pt-12 pb-10">
+    <main className="min-h-dvh lg:grid lg:grid-cols-[minmax(0,720fr)_minmax(0,816fr)]">
+      <PanelPermainan />
+      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-6 px-5 pt-8 pb-10 lg:justify-center lg:py-12">
       <header className="flex flex-col gap-1.5">
-        <h1 className="font-head text-[34px] font-extrabold">SambungKata</h1>
+        <h1 className="font-head text-[28px] leading-tight font-extrabold">{daftarMode ? 'Buat akun' : 'Selamat datang kembali'}</h1>
         <p className="text-[15px] leading-relaxed text-muted">
-          {daftarMode
-            ? 'Buat akun supaya kata yang kamu temukan tersimpan di Kamusku.'
-            : 'Sambung kata, kumpulkan kosakata, dan naik peringkat.'}
+          {daftarMode ? 'Skor dan Kamusku tersimpan di akunmu.' : 'Masuk untuk lanjut menyambung kata.'}
         </p>
       </header>
 
@@ -148,10 +227,10 @@ export default function Masuk() {
         {daftarMode && (
           <Kolom
             label="Username"
-            ikon={AtSign}
+            ikon={User}
             autoComplete="username"
             autoCapitalize="none"
-            placeholder="mis. sintaayu"
+            placeholder="Nama di papan peringkat"
             value={form.username}
             onChange={(e) => isi('username')({ target: { value: e.target.value.toLowerCase() } })}
             error={error.username || (cekNama && !cekNama.tersedia ? cekNama.pesan : undefined)}
@@ -165,7 +244,7 @@ export default function Masuk() {
           type="email"
           autoComplete="email"
           inputMode="email"
-          placeholder="email@contoh.com"
+          placeholder="Email yang kamu pakai"
           value={form.email}
           onChange={isi('email')}
           error={error.email}
@@ -175,10 +254,11 @@ export default function Masuk() {
           ikon={Lock}
           type={lihat ? 'text' : 'password'}
           autoComplete={daftarMode ? 'new-password' : 'current-password'}
-          placeholder={daftarMode ? 'Minimal 8 karakter' : 'Kata sandimu'}
+          placeholder={daftarMode ? 'Buat kata sandi baru' : 'Kata sandi akunmu'}
           value={form.password}
           onChange={isi('password')}
           error={error.password}
+          bantuan={daftarMode ? 'Minimal 8 karakter' : undefined}
           kanan={<TombolLihat lihat={lihat} setLihat={setLihat} />}
         />
         {daftarMode && (
@@ -187,7 +267,7 @@ export default function Masuk() {
             ikon={Lock}
             type={lihat ? 'text' : 'password'}
             autoComplete="new-password"
-            placeholder="Ketik ulang kata sandi"
+            placeholder="Ketik sekali lagi"
             value={form.ulangi}
             onChange={isi('ulangi')}
             error={error.ulangi}
@@ -201,7 +281,7 @@ export default function Masuk() {
           </p>
         )}
 
-        <Tombol type="submit" disabled={kirim} className="mt-2 w-full">
+        <Tombol type="submit" varian="accent" disabled={kirim} className="mt-2 w-full">
           {kirim ? 'Memproses...' : daftarMode ? 'Buat akun' : 'Masuk'}
           {!kirim && <ArrowRight size={18} aria-hidden="true" />}
         </Tombol>
@@ -220,6 +300,7 @@ export default function Masuk() {
           {daftarMode ? 'Masuk' : 'Daftar gratis'}
         </button>
       </p>
+      </div>
     </main>
   );
 }

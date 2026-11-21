@@ -258,7 +258,6 @@ export default function Kamusku() {
                   totalHalaman={meta.total_halaman}
                   onPindah={pindahHalaman}
                   label="Halaman Kamusku"
-                  ringkasan={`${angka(meta.total)} kata`}
                 />
               )}
             </>
