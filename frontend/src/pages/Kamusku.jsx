@@ -76,7 +76,8 @@ export default function Kamusku() {
   // Total halaman hanya dipakai untuk menjepit jika berasal dari filter yang sedang aktif;
   // setelah tombol Back, hasil lama milik filter lain tidak boleh memindahkan halaman.
   const kunciFilter = `${huruf}|${cari}`;
-  const [halaman, pindahHalaman] = useHalamanUrl(hasil.kunci === kunciFilter ? hasil.meta?.total_halaman : undefined);
+  const awalDaftar = useRef(null);
+  const [halaman, pindahHalaman] = useHalamanUrl(hasil.kunci === kunciFilter ? hasil.meta?.total_halaman : undefined, awalDaftar);
   const [memuat, setMemuat] = useState(true);
   const [error, setError] = useState(null);
   const [percobaan, setPercobaan] = useState(0);
@@ -209,7 +210,7 @@ export default function Kamusku() {
           )}
 
           {progres && (
-            <div className="flex justify-between text-[13px]">
+            <div ref={awalDaftar} className="flex justify-between text-[13px]">
               <span className="font-bold">{cari ? `Hasil untuk "${cari}"` : huruf === 'semua' ? 'Semua kata' : `Huruf ${huruf.toUpperCase()}`}</span>
               <span className="text-muted">
                 {cari

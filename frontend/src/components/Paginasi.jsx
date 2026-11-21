@@ -5,7 +5,8 @@ import { bacaHalaman } from '../lib/halamanKetik.js';
 const panah = 'flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-line-strong bg-surface hover:border-ink disabled:opacity-45 disabled:hover:border-line-strong';
 
 // Paginasi Kamusku dan Riwayat: "‹ Halaman [n] dari N ›". Angka di kolom bisa diketik lalu Enter;
-// Esc atau keluar kolom mengembalikan angka halaman sekarang.
+// Esc atau keluar kolom mengembalikan angka halaman sekarang. Menempel di bawah layar (di HP tepat
+// di atas bottom nav), jadi bisa dipakai tanpa menggulir ke akhir daftar.
 export default function Paginasi({ halaman, totalHalaman, onPindah, label, ringkasan }) {
   const id = useId();
   const [draf, setDraf] = useState(null);
@@ -29,9 +30,13 @@ export default function Paginasi({ halaman, totalHalaman, onPindah, label, ringk
   };
 
   return (
-    <nav aria-label={label} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pb-6">
-      {ringkasan && <p className="text-[13px] text-muted">{ringkasan}</p>}
-      <div className="ml-auto flex items-center gap-3">
+    <nav
+      aria-label={label}
+      className="sticky bottom-[calc(max(12px,env(safe-area-inset-bottom))+68px)] z-20 -mx-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line bg-bg/95 px-4 py-2.5 backdrop-blur sm:bottom-0 sm:-mx-8 sm:px-8 lg:-mx-12 lg:px-12"
+    >
+      {/* Di HP jumlah data sudah tampil di atas daftar; bilah cukup satu baris. */}
+      {ringkasan && <p className="hidden text-[13px] text-muted sm:block">{ringkasan}</p>}
+      <div className="mx-auto flex items-center gap-3 sm:mr-0 sm:ml-auto">
         <button type="button" onClick={() => onPindah(halaman - 1)} disabled={halaman <= 1} aria-label="Halaman sebelumnya" className={panah}>
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
@@ -74,7 +79,7 @@ export default function Paginasi({ halaman, totalHalaman, onPindah, label, ringk
               <span
                 id={`${id}-pesan`}
                 role={salah ? 'alert' : undefined}
-                className={`absolute top-full left-1/2 mt-1.5 -translate-x-1/2 text-[11px] font-semibold whitespace-nowrap ${salah ? 'text-accent' : 'text-muted'}`}
+                className={`absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 rounded-[6px] bg-surface px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap shadow-[0_1px_0_var(--color-line)] ${salah ? 'text-accent' : 'text-muted'}`}
               >
                 {salah ? `Pilih halaman 1 sampai ${totalHalaman}` : 'Tekan Enter untuk pindah'}
               </span>

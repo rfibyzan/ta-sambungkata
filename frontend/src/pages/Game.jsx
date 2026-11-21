@@ -11,7 +11,7 @@ import Skeleton from '../components/Skeleton.jsx';
 import KartuLawan from '../components/game/KartuLawan.jsx';
 import KilatanTepi from '../components/game/KilatanTepi.jsx';
 import KeyboardLayar from '../components/game/KeyboardLayar.jsx';
-import { hapusHuruf, MAKS_HURUF, tambahHuruf } from '../lib/keyboardLayar.js';
+import { aksiTombol, hapusHuruf, MAKS_HURUF, tambahHuruf } from '../lib/keyboardLayar.js';
 import { Avatar, Sheet, Tombol } from '../components/ui.jsx';
 import { jadwalTampilBot, PER_HURUF_MS } from '../lib/jadwalTampilBot.js';
 import { pisahTertunda } from '../lib/rantaiTertunda.js';
@@ -176,7 +176,7 @@ function ukuranKeping(jumlah) {
 // Tempat mengetik: huruf yang diketik muncul sebagai keping setelah awalan, lalu keyboard aplikasi.
 // Input asli tetap ada (transparan, inputMode none) untuk keyboard fisik dan pembaca layar,
 // tanpa memunculkan keyboard bawaan HP.
-function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo, terkunci, labelKirim, menyala }) {
+function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, formRef, onKirim, solo, terkunci, labelKirim, menyala }) {
   const [fokus, setFokus] = useState(false);
   const huruf = [...awalan, ...isian];
   const { ukuran, kursor, celah, kecil = '' } = ukuranKeping(huruf.length + 1);
@@ -185,7 +185,7 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
     setIsian(fn);
   };
   return (
-    <form onSubmit={onKirim} className="flex shrink-0 flex-col gap-2.5 sm:gap-3">
+    <form ref={formRef} onSubmit={onKirim} className="flex shrink-0 flex-col gap-2.5 sm:gap-3">
       <section
         aria-label="Ketik kata"
         className={`relative flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-[16px] border-2 bg-surface px-3 py-2.5 transition-colors sm:min-h-[100px] ${fokus ? 'border-ink' : 'border-line'}`}
@@ -222,13 +222,12 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
           inputMode="none"
           maxLength={MAKS_HURUF}
           value={isian}
-          // readOnly, bukan disabled: input disabled kehilangan fokus dan keyboard HP tertutup
-          // setiap giliran bot. Kiriman tetap diblokir di kirim() selama giliran bot.
-          readOnly={mengirim || Boolean(terkunci)}
+          // Selalu readOnly: inputmode none tidak dipatuhi semua HP, sedangkan input readOnly tidak
+          // pernah memunculkan keyboard bawaan. Ketikan keyboard fisik ditangkap di Game (keydown).
+          readOnly
           aria-disabled={Boolean(terkunci)}
           onFocus={() => setFokus(true)}
           onBlur={() => setFokus(false)}
-          onChange={(e) => setIsian(e.target.value.replace(/[^a-zA-Z]/g, '').toLowerCase())}
           className="absolute inset-0 size-full cursor-text rounded-[20px] text-base opacity-0"
         />
       </section>
@@ -285,6 +284,7 @@ export default function Game() {
   // Tombol keyboard layar yang menyala sesaat saat tombol fisiknya ditekan.
   const [menyala, setMenyala] = useState(null);
   const padamkan = useRef(null);
+  const formulir = useRef(null);
   // Giliran bot: null (giliranmu) atau { fase: 'berpikir' | 'keping' | 'alasan' | 'kalah', teks? }.
   const [statusBot, setStatusBot] = useState(null);
   // pukulan naik setiap nyawa berkurang dan memutar ulang animasinya; tandaMerah menandai kartu Kamu.
@@ -421,23 +421,26 @@ export default function Game() {
       });
   }, [sisa, game, keHasil, terima, kenaPukul]);
 
-  // Input selalu siap: jika fokus sempat pindah (mis. klik di luar kartu), ketikan huruf,
-  // Backspace, atau Enter langsung diarahkan kembali ke kartu ketik.
+  // Keyboard fisik: huruf, Backspace, dan Enter diproses di sini (input sendiri readOnly),
+  // di mana pun fokusnya, dan tombol yang sama di keyboard layar ikut menyala.
   useEffect(() => {
     if (konfirmasi) return undefined;
     const tangkap = (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (!/^[a-zA-Z]$/.test(e.key) && e.key !== 'Backspace' && e.key !== 'Enter') return;
-      setMenyala(e.key.toLowerCase());
+      const aksi = aksiTombol(e);
+      if (!aksi) return;
+      // Enter di tombol yang sedang difokus (mis. Menyerah) tetap menekan tombol itu.
+      if (aksi.jenis === 'kirim' && document.activeElement?.matches?.('button, a')) return;
+      e.preventDefault();
+      setMenyala(aksi.jenis === 'huruf' ? aksi.huruf : aksi.jenis === 'hapus' ? 'backspace' : 'enter');
       clearTimeout(padamkan.current);
       padamkan.current = setTimeout(() => setMenyala(null), LAMA_NYALA_MS);
-      const aktif = document.activeElement;
-      if (aktif === input.current || aktif?.matches?.('input, textarea, button, a, [contenteditable]')) return;
-      input.current?.focus();
+      if (aksi.jenis === 'kirim') return formulir.current?.requestSubmit();
+      if (mengirim || statusBot) return;
+      setIsian((s) => (aksi.jenis === 'huruf' ? tambahHuruf(s, aksi.huruf) : hapusHuruf(s)));
     };
     window.addEventListener('keydown', tangkap);
     return () => window.removeEventListener('keydown', tangkap);
-  }, [konfirmasi]);
+  }, [konfirmasi, mengirim, statusBot]);
 
   async function kirim(e) {
     e.preventDefault();
@@ -607,6 +610,7 @@ export default function Game() {
         mengirim={mengirim}
         goyang={goyang}
         inputRef={input}
+        formRef={formulir}
         onKirim={kirim}
         solo={solo}
         terkunci={terkunci}
