@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Bot, Trash2 } from 'lucide-react';
 import { detail, hapus } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
@@ -7,6 +7,7 @@ import { useMuat } from '../lib/useMuat.js';
 import { durasi, jamWib, labelHari, labelMode } from '../lib/format.js';
 import KataSambung, { KepingSambungan } from '../components/KataSambung.jsx';
 import StateView from '../components/StateView.jsx';
+import RincianSkor from '../components/RincianSkor.jsx';
 import Skeleton, { SkeletonBaris } from '../components/Skeleton.jsx';
 import { HeaderDetail, Pil, Sheet, TombolIkon, Tombol } from '../components/ui.jsx';
 
@@ -98,7 +99,7 @@ export default function DetailGame() {
 
   if (memuat) {
     return (
-      <div className="flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat detail game">
+      <div className="flex flex-col gap-5" aria-busy="true" aria-label="Memuat detail game">
         <HeaderDetail judul="Detail Game" kembaliKe="/riwayat" />
         <Skeleton className="h-24 rounded-[20px]" />
         <SkeletonBaris jumlah={5} />
@@ -107,7 +108,7 @@ export default function DetailGame() {
   }
   if (error) {
     return (
-      <div className="max-w-[640px]">
+      <div>
         <HeaderDetail judul="Detail Game" kembaliKe="/riwayat" />
         {error.status === 404 || error.status === 403 ? (
           <StateView keping="404" hot={0} judul="Game tidak ditemukan" pesan="Tautan ini mungkin salah atau riwayat game ini sudah dihapus." aksi={{ label: 'Ke riwayat', ke: '/riwayat', gelap: true }} />
@@ -120,15 +121,19 @@ export default function DetailGame() {
 
   const { game, rincian_skor: rincian, rantai } = data;
   const berjalan = game.status === 'berjalan';
+  const kataBaru = rantai.filter((w) => w.pemain === 'user' && w.baru);
 
   return (
-    <div className="flex max-w-[640px] flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <HeaderDetail
         judul="Detail Game"
         kembaliKe="/riwayat"
         kanan={!berjalan ? <TombolIkon ikon={Trash2} label="Hapus riwayat game ini" onClick={() => setKonfirmasi(true)} /> : undefined}
       />
 
+      {/* >= 1024px: kiri ringkasan, rincian skor, dan kata baru (menempel saat digulir); kanan rantai kata. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,520fr)_minmax(0,640fr)] lg:items-start lg:gap-12">
+      <div className="flex flex-col gap-5 lg:sticky lg:top-8 lg:max-h-[calc(100dvh-4rem)] lg:overflow-y-auto">
       <section className="flex items-center justify-between gap-3 rounded-[20px] border border-line bg-surface p-4">
         <div className="flex flex-col gap-1.5">
           <div className="flex gap-1.5">
@@ -161,12 +166,41 @@ export default function DetailGame() {
         ))}
       </dl>
 
+      <section aria-labelledby="judul-rincian" className="flex flex-col gap-2.5">
+        <h2 id="judul-rincian" className="text-base">
+          Rincian skor
+        </h2>
+        <RincianSkor rincian={rincian} mode={game.mode} />
+      </section>
+
+      {kataBaru.length > 0 && (
+        <section aria-labelledby="judul-kata-baru" className="flex flex-col gap-2.5">
+          <h2 id="judul-kata-baru" className="text-base">
+            {kataBaru.length} kata baru masuk Kamusku
+          </h2>
+          <ul className="grid grid-cols-3 gap-2">
+            {kataBaru.map((w) => (
+              <li key={w.kata.id}>
+                <Link
+                  to={`/kamus/${w.kata.id}`}
+                  className="keping-tekan flex h-11 items-center justify-center truncate rounded-[10px] border-[1.5px] border-gold bg-surface px-2 font-head text-sm font-bold hover:bg-bg"
+                >
+                  {w.kata.kata}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      </div>
+
       <section aria-labelledby="judul-rantai" className="flex flex-col gap-3">
         <h2 id="judul-rantai" className="text-base">
           Rantai kata
         </h2>
         <Timeline rantai={rantai} />
       </section>
+      </div>
 
       <Sheet
         terbuka={konfirmasi}

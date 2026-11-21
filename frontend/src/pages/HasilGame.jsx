@@ -8,6 +8,7 @@ import { labelMode } from '../lib/format.js';
 import { nilaiHitung } from '../lib/hitungNaik.js';
 import { useLayar } from '../lib/useLayar.js';
 import StateView from '../components/StateView.jsx';
+import RincianSkor from '../components/RincianSkor.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import { Pil, TombolIkon, Tombol } from '../components/ui.jsx';
 
@@ -38,13 +39,6 @@ function SkorNaik({ skor }) {
   );
 }
 
-const BARIS_RINCIAN = [
-  ['huruf', (n) => `Huruf (${n} huruf)`],
-  ['kata_baru', (n) => `Kata baru ter-unlock (${n})`],
-  ['jawab_cepat', (n) => `Jawab cepat (${n})`],
-  ['kunci_mati', (n) => `Kunci mati (${n})`],
-  ['menang_bot', () => 'Menang lawan bot'],
-];
 
 function judulStatus(game) {
   if (game.status === 'menang') return { teks: `Menang lawan ${labelMode(game.mode, game.tingkat)}`, gaya: 'bg-teal-soft text-teal' };
@@ -110,14 +104,7 @@ export default function HasilGame() {
         <p className="text-xs text-muted">{game.jumlah_kata} kata dijawab</p>
       </section>
 
-      <dl className="flex flex-col rounded-[14px] border border-line bg-surface px-4">
-        {BARIS_RINCIAN.filter(([k]) => k !== 'menang_bot' || game.mode === 'bot').map(([k, label], i, arr) => (
-          <div key={k} className={`flex justify-between py-3 ${i < arr.length - 1 ? 'border-b border-line' : ''}`}>
-            <dt className="text-[13px] text-muted">{label(rincian[k].jumlah)}</dt>
-            <dd className="font-head text-sm font-bold">+{rincian[k].poin}</dd>
-          </div>
-        ))}
-      </dl>
+      <RincianSkor rincian={rincian} mode={game.mode} />
 
       {kataBaru.length > 0 && (
         <section aria-labelledby="judul-kata-baru" className="flex flex-col gap-2.5">
