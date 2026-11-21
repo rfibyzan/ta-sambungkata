@@ -1,13 +1,42 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BookPlus, RotateCcw, Target, Trophy, X } from 'lucide-react';
 import { detail, mulai } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
 import { useMuat } from '../lib/useMuat.js';
 import { labelMode } from '../lib/format.js';
+import { nilaiHitung } from '../lib/hitungNaik.js';
+import { useLayar } from '../lib/useLayar.js';
 import StateView from '../components/StateView.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import { Pil, TombolIkon, Tombol } from '../components/ui.jsx';
+
+const DURASI_HITUNG = 700;
+const MAKS_BERGILIR = 12;
+
+// Skor dihitung naik sekali saat layar hasil tampil. Di mode kurangi gerak langsung angka akhir.
+function SkorNaik({ skor }) {
+  const kurangiGerak = useLayar('(prefers-reduced-motion: reduce)');
+  const [tampil, setTampil] = useState(kurangiGerak ? skor : 0);
+  useEffect(() => {
+    if (kurangiGerak) return undefined;
+    let id;
+    const mulai = performance.now();
+    const langkah = (t) => {
+      const p = (t - mulai) / DURASI_HITUNG;
+      setTampil(nilaiHitung(skor, p));
+      if (p < 1) id = requestAnimationFrame(langkah);
+    };
+    id = requestAnimationFrame(langkah);
+    return () => cancelAnimationFrame(id);
+  }, [skor, kurangiGerak]);
+  return (
+    <p className="font-head text-7xl leading-none font-extrabold tabular-nums">
+      <span aria-hidden="true">{kurangiGerak ? skor : tampil}</span>
+      <span className="sr-only">{skor}</span>
+    </p>
+  );
+}
 
 const BARIS_RINCIAN = [
   ['huruf', (n) => `Huruf (${n} huruf)`],
@@ -77,7 +106,7 @@ export default function HasilGame() {
           <Trophy size={14} aria-hidden="true" /> {status.teks}
         </Pil>
         <h1 className="text-sm font-medium text-muted">Skor</h1>
-        <p className="font-head text-7xl leading-none font-extrabold">{game.skor}</p>
+        <SkorNaik skor={game.skor} />
         <p className="text-xs text-muted">{game.jumlah_kata} kata dijawab</p>
       </section>
 
@@ -96,8 +125,8 @@ export default function HasilGame() {
             <BookPlus size={16} className="text-teal" aria-hidden="true" /> {kataBaru.length} kata baru masuk Kamusku
           </h2>
           <ul className="grid grid-cols-3 gap-2">
-            {kataBaru.map((w) => (
-              <li key={w.kata.id}>
+            {kataBaru.map((w, i) => (
+              <li key={w.kata.id} className="animate-pasang" style={{ animationDelay: `${300 + Math.min(i, MAKS_BERGILIR) * 60}ms` }}>
                 <Link
                   to={`/kamus/${w.kata.id}`}
                   className="flex h-11 items-center justify-center rounded-[10px] border-[1.5px] border-gold bg-surface font-head text-sm font-bold hover:bg-bg"

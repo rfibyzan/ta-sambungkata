@@ -8,7 +8,7 @@ import { hitungMundur } from '../lib/format.js';
 import { QuestCard } from '../components/QuestCard.jsx';
 import StateView from '../components/StateView.jsx';
 import Skeleton from '../components/Skeleton.jsx';
-import { HeaderDetail, Progres } from '../components/ui.jsx';
+import { HeaderDetail, LencanaXp, Progres } from '../components/ui.jsx';
 
 const HARI = ['S', 'S', 'R', 'K', 'J', 'S', 'M'];
 
@@ -28,11 +28,11 @@ function HitungMundur({ ms }) {
 
 export default function Quest() {
   const { data, setData, error, memuat, ulang } = useMuat(questHariIni);
-  const { klaim, mengklaim, pesan } = useKlaim(setData);
+  const { klaim, mengklaim, pesan, hadiah } = useKlaim(setData);
 
   if (memuat) {
     return (
-      <div className="mx-auto flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat quest">
+      <div className="flex flex-col gap-5" aria-busy="true" aria-label="Memuat quest">
         <HeaderDetail judul="Daily Quest" kembaliKe="/" />
         <Skeleton className="h-40 rounded-[20px]" />
         {[0, 1, 2].map((i) => (
@@ -44,7 +44,7 @@ export default function Quest() {
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-[640px]">
+      <div className="max-w-[640px]">
         <HeaderDetail judul="Daily Quest" kembaliKe="/" />
         <StateView keping="OFF" hot={1} judul="Quest hari ini belum bisa dimuat" pesan={`${error.pesan} Progres quest tetap dihitung saat kamu main.`} aksi={{ label: 'Coba lagi', onClick: ulang, gelap: true, error: true }} />
       </div>
@@ -60,16 +60,20 @@ export default function Quest() {
   const isiAwal = isiAkhir - data.streak + 1;
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <HeaderDetail judul="Daily Quest" kembaliKe="/" />
 
-      <section aria-label="Level dan streak" className="flex flex-col gap-3.5 rounded-[20px] bg-ink p-5 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <p className="font-head text-[26px] font-bold">Level {data.level}</p>
+      <section aria-label="Level dan streak" className="flex flex-col gap-3.5 rounded-[20px] bg-ink p-5 text-white lg:flex-row lg:items-center lg:gap-10 lg:px-6">
+        {/* ≥ 1024px satu baris: level, bar XP, deret streak, lalu kotak streak di kanan. */}
+        <div className="flex items-center justify-between lg:contents">
+          <div className="flex flex-col gap-0.5 lg:shrink-0">
+            <p className="relative font-head text-[26px] font-bold">
+              Level {data.level}
+              <LencanaXp hadiah={hadiah} className="top-1 left-full ml-3 text-gold" />
+            </p>
             <p className="text-xs text-white/70">{lv.sisa} XP lagi ke Level {data.level + 1}</p>
           </div>
-          <div className="flex flex-col items-center rounded-[14px] bg-white/10 px-3 py-2">
+          <div className="flex flex-col items-center rounded-[14px] bg-white/10 px-3 py-2 lg:order-last lg:shrink-0 lg:px-5">
             <span className="flex items-center gap-1 font-head text-xl font-bold">
               <Flame size={18} className="text-accent-soft" aria-hidden="true" /> {data.streak}
             </span>
@@ -77,7 +81,7 @@ export default function Quest() {
           </div>
         </div>
         <Progres nilai={lv.didapat} total={lv.butuh} warna="bg-gold" track="bg-white/15" tinggi="h-2.5" label="Progres XP" />
-        <ol className="flex justify-between" aria-label="Streak minggu ini">
+        <ol className="flex justify-between lg:w-[340px] lg:shrink-0" aria-label="Streak minggu ini">
           {HARI.map((h, i) => {
             const isi = data.streak > 0 && i >= isiAwal && i <= isiAkhir;
             const sekarang = i === hariIni;
@@ -101,7 +105,7 @@ export default function Quest() {
         <HitungMundur ms={data.reset_dalam_ms} />
       </div>
 
-      <ul className="flex flex-col gap-3">
+      <ul className="grid gap-3 lg:grid-cols-3 lg:gap-4">
         {data.quests.map((q) => (
           <QuestCard key={q.id} quest={q} onKlaim={klaim} mengklaim={mengklaim === q.id} />
         ))}

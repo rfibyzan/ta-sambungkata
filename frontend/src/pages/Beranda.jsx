@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Flame, Play, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -10,11 +11,10 @@ import { sapaan } from '../lib/format.js';
 import { DeretKeping } from '../components/LetterTile.jsx';
 import Skeleton from '../components/Skeleton.jsx';
 import { QuestCard } from '../components/QuestCard.jsx';
-import { Avatar, Pil, Progres } from '../components/ui.jsx';
+import { Avatar, LencanaXp, Pil, Progres } from '../components/ui.jsx';
 import StatistikRingkas from '../components/beranda/StatistikRingkas.jsx';
 import MainTerakhir from '../components/beranda/MainTerakhir.jsx';
 import PeringkatMingguan from '../components/beranda/PeringkatMingguan.jsx';
-import KepingLatar from '../components/beranda/KepingLatar.jsx';
 import { useLayar } from '../lib/useLayar.js';
 
 function KataHariIni() {
@@ -69,9 +69,9 @@ function TombolMain() {
   );
 }
 
-function QuestHariIni() {
+function QuestHariIni({ onHadiah }) {
   const { data, setData, error, memuat, ulang } = useMuat(questHariIni);
-  const { klaim, mengklaim, pesan } = useKlaim(setData);
+  const { klaim, mengklaim, pesan } = useKlaim(setData, onHadiah);
   return (
     <section aria-labelledby="judul-quest" className="flex flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -108,12 +108,12 @@ function QuestHariIni() {
 }
 
 export default function Beranda() {
+  const [hadiah, setHadiah] = useState(null);
   const { user } = useAuth();
   const lv = progresLevel(user.xp, user.level);
   const layarLebar = useLayar('(min-width: 1024px)');
   return (
     <div className="flex flex-col gap-6">
-      <KepingLatar />
       <header className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <p className="text-[13px] text-muted">{sapaan()},</p>
@@ -128,8 +128,9 @@ export default function Beranda() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Pil className="bg-ink font-head text-xs text-white">LV {user.level}</Pil>
-            <span className="text-[13px] text-muted">
+            <span className="relative text-[13px] text-muted">
               {lv.didapat} / {lv.butuh} XP
+              <LencanaXp hadiah={hadiah} className="-top-0.5 left-full ml-2 text-accent" />
             </span>
           </div>
           <span className="flex items-center gap-1 text-[13px] font-bold text-accent">
@@ -144,7 +145,7 @@ export default function Beranda() {
           <KataHariIni />
           <TombolMain />
         </div>
-        <QuestHariIni />
+        <QuestHariIni onHadiah={setHadiah} />
       </div>
 
       <StatistikRingkas userId={user.id} />

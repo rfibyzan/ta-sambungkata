@@ -82,7 +82,7 @@ export default function DetailKata() {
 
   const panjang = data.kata.length;
   return (
-    <article className="mx-auto flex max-w-[640px] flex-col gap-6">
+    <article className="flex max-w-[640px] flex-col gap-6">
       <HeaderDetail judul="" kembaliKe="/kamus" kanan={<TombolBagikan kata={data} />} />
 
       <header className="flex flex-col gap-3">

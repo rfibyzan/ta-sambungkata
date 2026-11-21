@@ -87,10 +87,10 @@ export default function Peringkat() {
   const sayaDiLuar = data?.posisi_saya && !data.data.some((r) => r.user_id === user.id);
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <JudulHalaman>Peringkat</JudulHalaman>
 
-      <div role="tablist" aria-label="Periode" className="flex rounded-[14px] bg-line p-1">
+      <div role="tablist" aria-label="Periode" className="flex rounded-[14px] bg-line p-1 lg:max-w-[480px]">
         {[
           ['mingguan', 'Mingguan'],
           ['semua', 'Sepanjang Masa'],
@@ -138,7 +138,11 @@ export default function Peringkat() {
         <>
           <Podium tiga={tiga} userId={user.id} />
           {(sisa.length > 0 || sayaDiLuar) && (
-            <ol className="overflow-hidden rounded-[14px] border border-line bg-surface [&>li+li]:border-t [&>li+li]:border-line">
+            // ≥ 1280px dibagi 2 kolom yang mengalir ke bawah: kolom kiri dulu, lalu kanan.
+            <ol
+              className="overflow-hidden rounded-[14px] border border-line bg-surface [&>li+li]:border-t [&>li+li]:border-line xl:grid xl:grid-flow-col xl:gap-x-px xl:bg-line xl:[grid-template-rows:repeat(var(--baris),auto)] xl:[&>li]:bg-surface"
+              style={{ '--baris': Math.ceil((sisa.length + (sayaDiLuar ? 1 : 0)) / 2) }}
+            >
               {sisa.map((r) => (
                 <Baris key={r.user_id} r={r} saya={r.user_id === user.id} />
               ))}

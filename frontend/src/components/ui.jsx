@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { inisial } from '../lib/format.js';
@@ -37,16 +37,20 @@ export function JudulHalaman({ children, className = '' }) {
 
 const WARNA_AVATAR = ['bg-teal', 'bg-accent', 'bg-purple', 'bg-ink'];
 
-export function Avatar({ user, ukuran = 44, className = '' }) {
+// dekorasi = false jika foto bukan hiasan (tidak ada nama di sebelahnya), supaya alt berisi username.
+// Foto yang gagal dimuat (file dihapus, offline) kembali ke inisial.
+export function Avatar({ user, ukuran = 44, className = '', dekorasi = true }) {
+  const [urlGagal, setUrlGagal] = useState(null);
   const nama = user?.username ?? '';
   let h = 0;
   for (const c of nama) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const warna = WARNA_AVATAR[h % WARNA_AVATAR.length];
-  if (user?.avatar_url) {
+  if (user?.avatar_url && user.avatar_url !== urlGagal) {
     return (
       <img
         src={user.avatar_url}
-        alt=""
+        alt={dekorasi ? '' : nama}
+        onError={() => setUrlGagal(user.avatar_url)}
         width={ukuran}
         height={ukuran}
         className={`shrink-0 rounded-full object-cover ${className}`}
@@ -76,8 +80,18 @@ export function Progres({ nilai, total, warna = 'bg-ink', track = 'bg-line', tin
       aria-label={label}
       className={`w-full overflow-hidden rounded-full ${track} ${tinggi}`}
     >
-      <div className={`h-full rounded-full transition-[width] duration-300 ${warna}`} style={{ width: `${Math.max(persen, nilai ? 3 : 0)}%` }} />
+      <div className={`h-full origin-left animate-isi rounded-full transition-[width] duration-500 ${warna}`} style={{ width: `${Math.max(persen, nilai ? 3 : 0)}%` }} />
     </div>
+  );
+}
+
+// Lencana "+N XP" yang naik lalu memudar setelah klaim. Pesan klaim (aria-live) yang diumumkan, bukan lencana ini.
+export function LencanaXp({ hadiah, className = '' }) {
+  if (!hadiah) return null;
+  return (
+    <span key={hadiah.kunci} aria-hidden="true" className={`pointer-events-none absolute animate-naik-hilang font-head text-sm font-extrabold whitespace-nowrap ${className}`}>
+      +{hadiah.xp} XP
+    </span>
   );
 }
 

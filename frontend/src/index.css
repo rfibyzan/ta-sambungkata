@@ -112,6 +112,71 @@
   }
 }
 
+/* Lawan bot. Semua otomatis nyaris nol di blok prefers-reduced-motion di atas;
+   Game.jsx juga mengganti titik berpikir dengan teks statis. */
+@keyframes getar {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes kilat-tepi {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes hati-pecah {
+  50% {
+    transform: scale(1.3) rotate(-12deg);
+  }
+  to {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+}
+
+@keyframes denyut {
+  40% {
+    transform: scale(1.18);
+  }
+}
+
+@keyframes titik {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@utility animate-getar {
+  animation: getar 300ms ease-in-out;
+}
+@utility animate-kilat-tepi {
+  animation: kilat-tepi 400ms ease-out both;
+}
+@utility animate-hati-pecah {
+  animation: hati-pecah 300ms ease-out;
+}
+@utility animate-denyut {
+  animation: denyut 300ms ease-out;
+}
+@utility animate-titik {
+  animation: titik 1s ease-in-out infinite;
+}
+
 @utility animate-kursor {
   animation: kursor 1s steps(1) infinite;
 }
@@ -124,4 +189,110 @@
 }
 @utility animate-kedip {
   animation: kedip 1.4s ease-in-out infinite;
+}
+
+/* Di luar layar game. Tujuan tiap gerak ada di tabel Gerak DESIGN.md. */
+@keyframes isi {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes naik-hilang {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+@keyframes balik {
+  from {
+    transform: rotateY(180deg);
+  }
+  to {
+    transform: rotateY(0deg);
+  }
+}
+
+@utility animate-isi {
+  animation: isi 600ms ease-out;
+}
+@utility animate-naik-hilang {
+  animation: naik-hilang 700ms ease-out forwards;
+}
+@utility animate-balik {
+  animation: balik 400ms ease-out both;
+}
+/* Kartu yang bisa diklik terasa seperti keping papan: turun saat ditekan. */
+@utility keping-tekan {
+  box-shadow: 0 3px 0 var(--color-line-strong);
+  transition:
+    transform 100ms ease-out,
+    box-shadow 100ms ease-out,
+    border-color 150ms;
+  &:active {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--color-line-strong);
+  }
+}
+
+/* Saat bermain dan layar hasil. */
+@keyframes isi-cincin {
+  from {
+    stroke-dashoffset: var(--panjang);
+  }
+}
+@keyframes pasang {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes letak {
+  from {
+    transform: scale(0.7);
+  }
+}
+@keyframes jatuh {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  70% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@utility animate-isi-cincin {
+  animation: isi-cincin 700ms ease-out;
+}
+@utility animate-pasang {
+  animation: pasang 250ms ease-out both;
+}
+@utility animate-letak {
+  animation: letak 80ms ease-out;
+}
+@utility animate-jatuh {
+  animation: jatuh 700ms ease-in forwards;
+}
+@utility animate-pop {
+  animation: pop 300ms ease-out both;
 }

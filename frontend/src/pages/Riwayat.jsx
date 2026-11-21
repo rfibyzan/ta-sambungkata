@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { Bot, Gamepad2, Timer } from 'lucide-react';
 import { riwayat } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
-import { jamWib, labelHari, labelMode } from '../lib/format.js';
+import { angka, jamWib, labelHari, labelMode } from '../lib/format.js';
+import { useHalamanUrl } from '../lib/useHalamanUrl.js';
+import Paginasi from '../components/Paginasi.jsx';
 import StateView from '../components/StateView.jsx';
 import { SkeletonBaris } from '../components/Skeleton.jsx';
 import { HeaderDetail, Pil } from '../components/ui.jsx';
@@ -22,7 +24,7 @@ function kelompokkan(daftar) {
 export default function Riwayat() {
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState(null);
-  const [halaman, setHalaman] = useState(1);
+  const [halaman, pindahHalaman] = useHalamanUrl(meta?.total_halaman);
   const [memuat, setMemuat] = useState(true);
   const [error, setError] = useState(null);
   const [percobaan, setPercobaan] = useState(0);
@@ -34,7 +36,7 @@ export default function Riwayat() {
     riwayat(halaman)
       .then((r) => {
         if (batal) return;
-        setData((lama) => (halaman === 1 ? r.data : [...lama, ...r.data]));
+        setData(r.data);
         setMeta(r.meta);
       })
       .catch((err) => !batal && setError(pesanError(err)))
@@ -45,12 +47,12 @@ export default function Riwayat() {
   }, [halaman, percobaan]);
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <HeaderDetail judul="Riwayat Permainan" kembaliKe="/profil" />
 
-      {memuat && halaman === 1 ? (
+      {memuat ? (
         <SkeletonBaris jumlah={5} />
-      ) : error && halaman === 1 ? (
+      ) : error ? (
         <StateView keping="OFF" hot={1} judul="Gagal memuat riwayat" pesan={`${error} Riwayatmu tidak hilang.`} aksi={{ label: 'Coba lagi', onClick: () => setPercobaan((n) => n + 1), gelap: true, error: true }} />
       ) : data.length === 0 ? (
         <StateView
@@ -65,13 +67,13 @@ export default function Riwayat() {
           {kelompokkan(data).map((grup) => (
             <section key={grup.label} aria-label={grup.label} className="flex flex-col gap-2">
               <h2 className="font-body text-[13px] font-bold text-muted">{grup.label}</h2>
-              <ul className="flex flex-col gap-2">
+              <ul className="grid gap-2 lg:grid-cols-2 lg:gap-4 min-[1600px]:grid-cols-3">
                 {grup.isi.map((g) => {
                   const solo = g.mode === 'solo';
                   const Ikon = solo ? Timer : Bot;
                   return (
                     <li key={g.id}>
-                      <Link to={`/riwayat/${g.id}`} className="flex items-center gap-3 rounded-[14px] border border-line-strong bg-surface p-3.5 hover:border-ink">
+                      <Link to={`/riwayat/${g.id}`} className="keping-tekan flex items-center gap-3 rounded-[14px] border border-line-strong bg-surface p-3.5 hover:border-ink">
                         <span className={`flex size-[42px] shrink-0 items-center justify-center rounded-[10px] ${solo ? 'bg-accent-soft text-accent' : 'bg-teal-soft text-teal'}`}>
                           <Ikon size={20} aria-hidden="true" />
                         </span>
@@ -96,16 +98,14 @@ export default function Riwayat() {
               </ul>
             </section>
           ))}
-          {error && <p role="alert" className="text-center text-[13px] font-semibold text-accent">{error}</p>}
-          {meta && halaman < meta.total_halaman && (
-            <button
-              type="button"
-              onClick={() => setHalaman((h) => h + 1)}
-              disabled={memuat}
-              className="mx-auto flex h-11 items-center rounded-[10px] border border-line-strong bg-surface px-5 text-sm font-bold hover:border-ink disabled:opacity-60"
-            >
-              {memuat ? 'Memuat...' : 'Muat lebih banyak'}
-            </button>
+          {meta && (
+            <Paginasi
+              halaman={halaman}
+              totalHalaman={meta.total_halaman}
+              onPindah={pindahHalaman}
+              label="Halaman riwayat"
+              ringkasan={`${angka(meta.total)} game`}
+            />
           )}
           <p className="text-center text-xs text-muted">Buka detail game untuk menghapus riwayat.</p>
         </>

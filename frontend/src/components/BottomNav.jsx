@@ -41,7 +41,11 @@ export default function BottomNav() {
         aria-label="Navigasi utama"
         className="fixed inset-y-0 left-0 z-30 hidden w-24 flex-col border-r border-line bg-surface px-2.5 py-7 sm:flex lg:w-58 lg:px-4"
       >
-        <p className="mb-6 hidden px-3 font-head text-[22px] font-extrabold lg:block">SambungKata</p>
+        {/* Logo keping S dan K (sama dengan ikon PWA). Di rail 600 sampai 1023px hanya logonya yang tampil. */}
+        <p className="mb-6 flex items-center justify-center gap-2.5 lg:justify-start lg:px-1">
+          <img src="/favicon.svg" width="36" height="36" alt="" className="size-9 shrink-0" />
+          <span className="sr-only font-head text-xl font-extrabold whitespace-nowrap lg:not-sr-only">SambungKata</span>
+        </p>
         <ul className="flex flex-col gap-2 lg:gap-1.5">
           {MENU.map(({ ke, label, ikon: Ikon, akhir }) => (
             <li key={ke}>

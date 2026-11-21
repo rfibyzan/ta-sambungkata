@@ -13,7 +13,7 @@ export default function DetailPemain() {
 
   if (memuat) {
     return (
-      <div className="mx-auto flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat profil pemain">
+      <div className="flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat profil pemain">
         <HeaderDetail judul="Profil Pemain" />
         <Skeleton className="h-60 rounded-[20px]" />
         <Skeleton className="h-16" />
@@ -23,7 +23,7 @@ export default function DetailPemain() {
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-[640px]">
+      <div className="max-w-[640px]">
         <HeaderDetail judul="Profil Pemain" />
         {error.status === 404 ? (
           <StateView keping="404" hot={0} judul="Pemain tidak ditemukan" pesan="Akun pemain ini mungkin sudah dihapus." aksi={{ label: 'Ke peringkat', ke: '/peringkat', gelap: true }} />
@@ -44,7 +44,7 @@ export default function DetailPemain() {
   const persenMenang = s.game_bot ? Math.round((s.menang_bot / s.game_bot) * 100) : null;
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-6">
+    <div className="flex max-w-[640px] flex-col gap-6">
       <HeaderDetail judul="Profil Pemain" />
 
       <section className="flex flex-col items-center gap-3.5 rounded-[20px] bg-ink p-5 text-white">

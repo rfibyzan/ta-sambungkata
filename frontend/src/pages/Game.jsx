@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Bot, ChevronRight, CircleAlert, CornerDownLeft, Delete, Flag, Heart, HeartOff, Sparkles, Trophy, WifiOff } from 'lucide-react';
+import { Bot, ChevronRight, CircleAlert, CornerDownLeft, Delete, Flag, Sparkles, Trophy, WifiOff } from 'lucide-react';
 import { detail, kirimKata, selesaikan } from '../api/games.js';
 import { pesanError } from '../api/axios.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -8,15 +8,39 @@ import LetterTile from '../components/LetterTile.jsx';
 import KataSambung from '../components/KataSambung.jsx';
 import StateView from '../components/StateView.jsx';
 import Skeleton from '../components/Skeleton.jsx';
+import KartuLawan from '../components/game/KartuLawan.jsx';
+import KilatanTepi from '../components/game/KilatanTepi.jsx';
 import { Avatar, Sheet, Tombol } from '../components/ui.jsx';
+import { jadwalTampilBot, PER_HURUF_MS } from '../lib/jadwalTampilBot.js';
+import { pisahTertunda } from '../lib/rantaiTertunda.js';
+import { useLayar } from '../lib/useLayar.js';
 
 const DURASI = { solo: 60000, bot: 15000 };
+const ALASAN_KALAH_MS = 1500;
+const LAMA_TANDA_MERAH_MS = 1000;
 
 // Ubah respons API menjadi item rantai untuk ditampilkan.
 const item = (kata, pemain, extra = {}) => ({ kata: kata.kata, pemain, ...extra });
 
 function rantaiDariDetail(d) {
-  return d.rantai.map((w) => item(w.kata, w.pemain, { baru: w.baru, kunci_mati: w.kunci_mati }));
+  return d.rantai.map((w) => item(w.kata, w.pemain, { baru: w.baru, kunci_mati: w.kunci_mati, created_at: w.created_at }));
+}
+
+// Kata bot muncul huruf demi huruf (150 ms per huruf), lalu tampil dengan sorotan sambungan.
+function KataBertahap({ kata }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (n >= kata.length) return undefined;
+    const t = setTimeout(() => setN((x) => x + 1), PER_HURUF_MS);
+    return () => clearTimeout(t);
+  }, [n, kata.length]);
+  if (n >= kata.length) return <KataSambung kata={kata} warna="text-ink" />;
+  return (
+    <span className="font-head font-bold" aria-hidden="true">
+      {kata.slice(0, n)}
+      <span className="opacity-30">{kata.slice(n).replace(/./g, '·')}</span>
+    </span>
+  );
 }
 
 function useJam(game, offset) {
@@ -31,7 +55,8 @@ function useJam(game, offset) {
   return sisa;
 }
 
-function CincinWaktu({ sisaMs }) {
+// potong: { detik, kunci } setelah jawaban salah di Solo; kunci baru memutar ulang "-3".
+function CincinWaktu({ sisaMs, potong }) {
   const detik = Math.max(0, Math.ceil(sisaMs / 1000));
   const r = 66;
   const keliling = 2 * Math.PI * r;
@@ -56,22 +81,23 @@ function CincinWaktu({ sisaMs }) {
         <span className={`font-head text-[52px] leading-none font-extrabold ${detik <= 10 ? 'text-accent' : ''}`}>{detik}</span>
         <span className="text-xs text-muted">detik</span>
       </div>
+      {potong && (
+        <span key={potong.kunci} aria-hidden="true" className="absolute top-3 -right-2 animate-jatuh font-head text-xl font-extrabold text-accent">
+          -{potong.detik}
+        </span>
+      )}
     </div>
   );
 }
 
-function Nyawa({ jumlah, label }) {
-  return (
-    <span className="flex gap-0.5" aria-label={`${label}: ${jumlah} dari 3 nyawa`}>
-      {[0, 1, 2].map((i) =>
-        i < jumlah ? <Heart key={i} size={14} className="text-accent" aria-hidden="true" /> : <HeartOff key={i} size={14} className="text-muted" aria-hidden="true" />,
-      )}
-    </span>
-  );
+function PilKunciMati({ poin }) {
+  return <span className="inline-flex shrink-0 animate-pop items-center rounded-[6px] bg-ink px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap text-white">Kunci mati{poin ? ' +10' : ''}</span>;
 }
 
 function RantaiSolo({ rantai }) {
   const tampil = rantai.slice(-4);
+  // Kunci memakai posisi di seluruh rantai, jadi hanya kata baru yang dipasang (dianimasikan).
+  const awal = rantai.length - tampil.length;
   return (
     <section aria-label="Rantai kata" className="flex flex-col gap-2.5">
       <h2 className="font-body text-xs font-bold text-muted">Rantai kata</h2>
@@ -79,10 +105,16 @@ function RantaiSolo({ rantai }) {
         {tampil.map((w, i) => {
           const terakhir = i === tampil.length - 1;
           return (
-            <li key={`${w.kata}-${i}`} className="flex items-center gap-1.5">
+            <li key={awal + i} className="relative flex animate-pasang items-center gap-1.5">
               <span className={`rounded-[8px] border-[1.5px] px-2 py-1.5 text-sm ${terakhir ? 'border-ink bg-surface' : 'border-line opacity-70'}`}>
                 <KataSambung kata={w.kata} kepala={w.pemain !== 'sistem'} />
               </span>
+              {w.kunci_mati && <PilKunciMati poin={w.pemain === 'user'} />}
+              {w.poin ? (
+                <span aria-hidden="true" className="pointer-events-none absolute -top-4 left-2 animate-naik-hilang font-head text-sm font-extrabold text-teal">
+                  +{w.poin}
+                </span>
+              ) : null}
               {!terakhir && <ChevronRight size={14} className="text-muted" aria-hidden="true" />}
             </li>
           );
@@ -92,7 +124,7 @@ function RantaiSolo({ rantai }) {
   );
 }
 
-function RantaiBot({ rantai, user, tingkat }) {
+function RantaiBot({ rantai, user, tingkat, kurangiGerak }) {
   const ujung = useRef(null);
   useEffect(() => {
     ujung.current?.scrollIntoView({ block: 'nearest' });
@@ -112,11 +144,12 @@ function RantaiBot({ rantai, user, tingkat }) {
           }
           const saya = w.pemain === 'user';
           return (
-            <li key={i} className={`flex items-end gap-1.5 ${saya ? 'justify-end' : 'justify-start'}`}>
+            <li key={i} className={`flex items-end gap-1.5 ${saya ? 'animate-pasang justify-end' : 'justify-start'}`}>
               {!saya && <Bot size={16} className="mb-2 text-muted" aria-label={`Bot ${tingkat}`} />}
               <span className={`flex items-center gap-2 px-3 py-2 text-[15px] ${saya ? 'rounded-[14px_14px_4px_14px] bg-teal-soft' : 'rounded-[14px_14px_14px_4px] bg-bg'}`}>
-                <KataSambung kata={w.kata} warna={saya ? 'text-teal' : 'text-ink'} />
+                {w.bertahap && !kurangiGerak ? <KataBertahap kata={w.kata} /> : <KataSambung kata={w.kata} warna={saya ? 'text-teal' : 'text-ink'} />}
                 {saya && w.poin ? <span className="text-[11px] font-bold text-teal">+{w.poin}</span> : null}
+                {w.kunci_mati && <PilKunciMati poin={saya} />}
               </span>
               {saya && <Avatar user={user} ukuran={22} className="mb-1" />}
             </li>
@@ -137,7 +170,7 @@ function ukuranKeping(jumlah) {
 
 // Tempat mengetik: huruf yang diketik langsung muncul sebagai keping setelah awalan.
 // Input asli tetap ada (transparan, menutupi kartu) supaya keyboard HP muncul saat kartu diketuk.
-function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo }) {
+function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKirim, solo, terkunci }) {
   const [fokus, setFokus] = useState(false);
   const huruf = [...awalan, ...isian];
   const { ukuran, kursor } = ukuranKeping(huruf.length + 1);
@@ -149,18 +182,24 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
         className={`relative flex flex-col items-center gap-4 rounded-[20px] border-2 bg-surface px-4 pt-5 pb-4 transition-colors ${fokus ? 'border-ink' : 'border-line'}`}
       >
         <p className="text-[13px] text-muted">
-          Ketik kata yang diawali <strong className="font-bold text-accent uppercase">{awalan}</strong>
+          {terkunci ? (
+            terkunci
+          ) : (
+            <>
+              Ketik kata yang diawali <strong className="font-bold text-accent uppercase">{awalan}</strong>
+            </>
+          )}
         </p>
         <div className={`flex flex-wrap items-center justify-center gap-1.5 ${goyang ? 'animate-tekan' : ''}`} aria-hidden="true">
           {huruf.map((h, i) => (
-            <LetterTile key={i} huruf={h} ukuran={ukuran} hot={i < awalan.length} />
+            <LetterTile key={i} huruf={h} ukuran={ukuran} hot={i < awalan.length} className={i < awalan.length ? '' : 'animate-letak'} />
           ))}
           <span className={`inline-flex shrink-0 items-center justify-center rounded-[10px] border-[1.5px] border-dashed border-line-strong ${kursor}`}>
             {fokus && <span className="h-1/2 w-0.5 animate-kursor bg-accent" />}
           </span>
         </div>
         <label htmlFor="isian-kata" className="sr-only">
-          Lanjutkan kata yang diawali {awalan}
+          {terkunci || `Lanjutkan kata yang diawali ${awalan}`}
         </label>
         <input
           id="isian-kata"
@@ -173,7 +212,10 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
           enterKeyHint="send"
           maxLength={30}
           value={isian}
-          readOnly={mengirim}
+          // readOnly, bukan disabled: input disabled kehilangan fokus dan keyboard HP tertutup
+          // setiap giliran bot. Kiriman tetap diblokir di kirim() selama giliran bot.
+          readOnly={mengirim || Boolean(terkunci)}
+          aria-disabled={Boolean(terkunci)}
           onFocus={() => setFokus(true)}
           onBlur={() => setFokus(false)}
           onChange={(e) => setIsian(e.target.value.replace(/[^a-zA-Z]/g, '').toLowerCase())}
@@ -187,7 +229,7 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
             setIsian((s) => s.slice(0, -1));
             inputRef.current?.focus();
           }}
-          disabled={mengirim || !isian}
+          disabled={mengirim || !isian || Boolean(terkunci)}
           aria-label="Hapus huruf terakhir"
           className="flex h-13 w-14 shrink-0 items-center justify-center rounded-[14px] border border-line-strong bg-surface hover:bg-bg disabled:opacity-40"
         >
@@ -195,7 +237,7 @@ function KepingKetik({ awalan, isian, setIsian, mengirim, goyang, inputRef, onKi
         </button>
         <button
           type="submit"
-          disabled={mengirim || !isian}
+          disabled={mengirim || !isian || Boolean(terkunci)}
           className="flex h-13 flex-1 items-center justify-center gap-2 rounded-[14px] bg-accent font-bold text-white shadow-[0_4px_0_var(--color-accent-shadow)] transition hover:brightness-110 active:translate-y-1 active:shadow-none disabled:bg-line-strong disabled:shadow-none"
         >
           {mengirim ? 'Mengirim...' : isian ? `Kirim ${kata}` : 'Ketik dulu'}
@@ -215,8 +257,9 @@ function Umpan({ umpan }) {
     sukses: 'bg-teal-soft text-teal',
     salah: 'bg-accent-soft text-accent',
     info: 'bg-ink text-white',
+    tunggu: 'bg-ink text-white',
   }[umpan.jenis];
-  const Ikon = { sukses: Sparkles, salah: CircleAlert, info: WifiOff }[umpan.jenis];
+  const Ikon = { sukses: Sparkles, salah: CircleAlert, info: WifiOff, tunggu: Bot }[umpan.jenis];
   return (
     <div role="status" className={`flex animate-muncul items-start gap-2.5 rounded-[14px] px-3.5 py-2.5 ${gaya}`}>
       <Ikon size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -245,11 +288,63 @@ export default function Game() {
   const [umpan, setUmpan] = useState(null);
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [goyang, setGoyang] = useState(false);
+  const [potong, setPotong] = useState(null);
+  // Giliran bot: null (giliranmu) atau { fase: 'berpikir' | 'keping' | 'alasan' | 'kalah', teks? }.
+  const [statusBot, setStatusBot] = useState(null);
+  // pukulan naik setiap nyawa berkurang dan memutar ulang animasinya; tandaMerah menandai kartu Kamu.
+  const [pukulan, setPukulan] = useState(0);
+  const [tandaMerah, setTandaMerah] = useState(false);
+  const [pengumuman, setPengumuman] = useState('');
+  const kurangiGerak = useLayar('(prefers-reduced-motion: reduce)');
   const offset = useRef(lokasi.state?.game ? Date.parse(lokasi.state.game.server_time) - Date.now() : 0);
   const questSelesai = useRef([]);
   const sinkronUntuk = useRef(null);
   const input = useRef(null);
+  const timer = useRef([]);
   const sisa = useJam(game, offset);
+
+  const jadwalkan = useCallback((fn, ms) => {
+    timer.current.push(setTimeout(fn, ms));
+  }, []);
+  useEffect(() => () => timer.current.forEach(clearTimeout), []);
+
+  // Nyawa berkurang: hati pecah, kartu bergetar, -1, dan tepi layar merah sekali.
+  // Saat gerak dikurangi, bingkai merah bertahan sampai giliran berikutnya.
+  const kenaPukul = useCallback(() => {
+    setPukulan((n) => n + 1);
+    setTandaMerah(true);
+    if (!kurangiGerak) jadwalkan(() => setTandaMerah(false), LAMA_TANDA_MERAH_MS);
+  }, [jadwalkan, kurangiGerak]);
+
+  // Kata bot (dan kata acak baru setelah kunci mati) ditahan lalu ditampilkan sesuai jadwal
+  // dari server. Input terkunci sampai jeda_ms habis.
+  const mainkanGiliranBot = useCallback(
+    (balasan) => {
+      const kunciMati = balasan.kunci_mati;
+      for (const { fase, mulai } of jadwalTampilBot({ ...balasan, panjang: balasan.kata.kata.length })) {
+        jadwalkan(() => {
+          if (fase === 'berpikir') setStatusBot({ fase });
+          if (fase === 'keping') {
+            setStatusBot({ fase });
+            setRantai((lama) => [...lama, item(balasan.kata, 'bot', { kunci_mati: kunciMati, bertahap: true })]);
+            setPengumuman(`Bot menjawab ${balasan.kata.kata}`);
+          }
+          if (fase === 'alasan') {
+            setStatusBot({ fase, teks: 'Kunci mati, rantai diulang' });
+            setRantai((lama) => [...lama, item(balasan.kata_acak_baru, 'sistem')]);
+            setPengumuman(`Bot membuat kunci mati. Kata acak baru: ${balasan.kata_acak_baru.kata}`);
+          }
+          if (fase === 'selesai') setStatusBot(null);
+        }, mulai);
+      }
+    },
+    [jadwalkan],
+  );
+
+  // Fokus kembali ke kolom jawaban setelah input tidak lagi terkunci (setelah render).
+  useEffect(() => {
+    if (!statusBot) input.current?.focus();
+  }, [statusBot]);
 
   const terima = useCallback((g) => {
     offset.current = Date.parse(g.server_time) - Date.now();
@@ -271,13 +366,24 @@ export default function Game() {
       questSelesai.current.push(...(d.quest_selesai ?? []));
       if (d.game.status !== 'berjalan') return keHasil(d.game.id);
       terima(d.game);
-      setRantai(rantaiDariDetail(d));
+      // Dimuat ulang di tengah jeda bot: kata yang waktunya belum tiba ditahan dan input terkunci.
+      const sekarang = Date.parse(d.game.server_time);
+      const { tampil, tertunda } = pisahTertunda(rantaiDariDetail(d), sekarang);
+      setRantai(tampil);
+      if (tertunda.length) {
+        setStatusBot({ fase: 'berpikir' });
+        const sisaJeda = Math.max(...tertunda.map((w) => Date.parse(w.created_at))) - sekarang;
+        jadwalkan(() => {
+          setRantai((lama) => [...lama, ...tertunda]);
+          setStatusBot(null);
+        }, sisaJeda);
+      }
     } catch (err) {
       setErrorMuat({ pesan: pesanError(err), status: err?.response?.status });
     } finally {
       setMemuat(false);
     }
-  }, [gameId, keHasil, terima]);
+  }, [gameId, keHasil, terima, jadwalkan]);
 
   useEffect(() => {
     muat(Boolean(lokasi.state?.game));
@@ -303,13 +409,14 @@ export default function Game() {
         }
         terima(d.game);
         if (game.mode === 'bot' && d.game.nyawa < game.nyawa) {
+          kenaPukul();
           setUmpan({ jenis: 'salah', judul: 'Waktu giliranmu habis', pesan: 'Nyawa berkurang 1. Giliranmu diulang.' });
         }
       })
       .catch(() => {
         sinkronUntuk.current = null;
       });
-  }, [sisa, game, keHasil, terima]);
+  }, [sisa, game, keHasil, terima, kenaPukul]);
 
   // Input selalu siap: jika fokus sempat pindah (mis. klik di luar kartu), ketikan huruf,
   // Backspace, atau Enter langsung diarahkan kembali ke kartu ketik.
@@ -328,7 +435,7 @@ export default function Game() {
 
   async function kirim(e) {
     e.preventDefault();
-    if (!game || mengirim || !isian.trim()) return;
+    if (!game || mengirim || statusBot || !isian.trim()) return;
     const kata = `${game.awalan_berikutnya}${isian.trim().toLowerCase()}`;
     setMengirim(true);
     try {
@@ -339,31 +446,38 @@ export default function Game() {
         setGoyang(true);
         setTimeout(() => setGoyang(false), 300);
         const penalti = r.penalti?.detik ? `Waktu berkurang ${r.penalti.detik} detik.` : r.penalti?.nyawa ? 'Nyawa berkurang 1.' : '';
+        if (r.penalti?.nyawa) kenaPukul();
+        if (r.penalti?.detik) setPotong({ detik: r.penalti.detik, kunci: Date.now() });
         setUmpan({ jenis: 'salah', judul: r.pesan, pesan: penalti });
       } else {
+        setTandaMerah(false);
         const baru = [item(r.kata, 'user', { poin: r.poin, baru: r.unlock, kunci_mati: r.kunci_mati })];
         if (r.kata_acak_baru) baru.push(item(r.kata_acak_baru, 'sistem'));
-        if (r.balasan_bot) {
-          baru.push(item(r.balasan_bot.kata, 'bot', { kunci_mati: r.balasan_bot.kunci_mati }));
-          if (r.balasan_bot.kata_acak_baru) baru.push(item(r.balasan_bot.kata_acak_baru, 'sistem'));
-        }
         setRantai((lama) => [...lama, ...baru]);
+        if (r.balasan_bot) mainkanGiliranBot(r.balasan_bot);
         setIsian('');
         const detailPoin = [
           r.unlock && 'Kata baru masuk Kamusku',
           r.rincian.jawab_cepat && 'jawab cepat +3',
           r.kunci_mati && 'Kunci mati +10, rantai diulang',
-          r.balasan_bot?.kunci_mati && 'Bot membuat kunci mati, rantai diulang',
         ].filter(Boolean);
         setUmpan({ jenis: 'sukses', judul: `"${r.kata.kata}" diterima  +${r.poin}`, pesan: detailPoin.join(', ') });
       }
-      if (r.selesai) keHasil(r.game.id);
+      if (r.bot_menyerah) {
+        // Bot kalah: alasannya tampil di kartu Bot sebentar, baru pindah ke layar hasil.
+        setStatusBot({ fase: 'kalah', teks: `Tidak menemukan kata berawalan ${r.bot_kalah_awalan ?? ''}`.trim() });
+        setPengumuman(`Bot kalah. Tidak menemukan kata berawalan ${r.bot_kalah_awalan ?? ''}`);
+        jadwalkan(() => keHasil(r.game.id), ALASAN_KALAH_MS);
+      } else if (r.selesai) {
+        keHasil(r.game.id);
+      }
     } catch (err) {
-      setUmpan({
-        jenis: 'info',
-        judul: 'Jawaban belum terkirim',
-        pesan: pesanError(err),
-      });
+      // 409: kata dikirim saat bot belum selesai. Bukan jawaban salah, isian tetap disimpan.
+      setUmpan(
+        err?.response?.status === 409
+          ? { jenis: 'tunggu', judul: 'Tunggu giliran bot selesai', pesan: 'Kata kamu belum dikirim. Coba lagi setelah bot menjawab.' }
+          : { jenis: 'info', judul: 'Jawaban belum terkirim', pesan: pesanError(err) },
+      );
     } finally {
       setMengirim(false);
       input.current?.focus();
@@ -400,8 +514,12 @@ export default function Game() {
   if (!game) return null;
 
   const solo = game.mode === 'solo';
-  const awalan = game.awalan_berikutnya;
+  // Selama giliran bot, awalan mengikuti kata terakhir yang sudah tampil, supaya akhiran
+  // kata bot tidak bocor sebelum katanya muncul.
+  const awalan = statusBot ? (rantai.at(-1)?.kata.slice(-2) ?? '') : game.awalan_berikutnya;
   const detikGiliran = Math.max(0, Math.ceil((sisa ?? DURASI.bot) / 1000));
+  const kritis = !solo && detikGiliran <= 5;
+  const terkunci = statusBot ? (statusBot.fase === 'kalah' ? 'Game selesai' : 'Tunggu bot selesai menjawab') : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -425,37 +543,44 @@ export default function Game() {
 
       {solo ? (
         <>
-          <CincinWaktu sisaMs={sisa ?? DURASI.solo} />
+          <CincinWaktu sisaMs={sisa ?? DURASI.solo} potong={potong} />
           <RantaiSolo rantai={rantai} />
         </>
       ) : (
         <>
-          <div className="flex items-center gap-2.5">
-            <div className="flex flex-1 items-center gap-2.5 rounded-[14px] border-2 border-ink bg-surface p-3">
-              <Avatar user={user} ukuran={36} />
-              <div className="flex flex-col gap-1">
-                <span className="text-[13px] font-bold">Kamu</span>
-                <Nyawa jumlah={game.nyawa} label="Kamu" />
+          {pukulan > 0 && !kurangiGerak && <KilatanTepi key={pukulan} />}
+          <KartuLawan
+            user={user}
+            nyawa={game.nyawa}
+            tingkat={game.tingkat}
+            giliran={statusBot ? 'bot' : 'kamu'}
+            statusBot={statusBot}
+            pukulan={pukulan}
+            tandaMerah={tandaMerah}
+            kurangiGerak={kurangiGerak}
+          />
+          {statusBot ? (
+            <p className="flex h-[38px] items-end text-[13px] font-bold text-muted">{statusBot.fase === 'kalah' ? 'Game selesai' : 'Giliran bot'}</p>
+          ) : (
+            <div className="flex flex-col gap-1.5" role="timer" aria-label={`Sisa waktu giliran ${detikGiliran} detik`}>
+              <div className={`flex justify-between text-[13px] font-bold ${kritis ? 'text-accent' : ''}`}>
+                <span className="text-accent">Giliranmu</span>
+                <span key={kritis ? detikGiliran : 'normal'} className={`font-head ${kritis ? 'animate-denyut' : ''}`}>
+                  0:{String(detikGiliran).padStart(2, '0')}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-line" aria-hidden="true">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-200 ${kritis ? 'bg-accent' : 'bg-ink'}`}
+                  style={{ width: `${Math.max(0, Math.min(100, ((sisa ?? 0) / DURASI.bot) * 100))}%` }}
+                />
               </div>
             </div>
-            <span className="font-head text-sm font-extrabold text-muted">VS</span>
-            <div className="flex flex-1 items-center gap-2.5 rounded-[14px] border border-line bg-transparent p-3">
-              <span className="flex size-9 items-center justify-center rounded-full bg-ink text-white" aria-hidden="true">
-                <Bot size={18} />
-              </span>
-              <span className="text-[13px] font-bold">Bot {game.tingkat === 'sulit' ? 'Sulit' : 'Mudah'}</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5" role="timer" aria-label={`Sisa waktu giliran ${detikGiliran} detik`}>
-            <div className="flex justify-between text-[13px] font-bold">
-              <span className="text-accent">Giliranmu</span>
-              <span className="font-head">0:{String(detikGiliran).padStart(2, '0')}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-line" aria-hidden="true">
-              <div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${Math.max(0, Math.min(100, ((sisa ?? 0) / DURASI.bot) * 100))}%` }} />
-            </div>
-          </div>
-          <RantaiBot rantai={rantai} user={user} tingkat={game.tingkat} />
+          )}
+          <RantaiBot rantai={rantai} user={user} tingkat={game.tingkat} kurangiGerak={kurangiGerak} />
+          <p className="sr-only" aria-live="polite">
+            {pengumuman}
+          </p>
         </>
       )}
 
@@ -468,6 +593,7 @@ export default function Game() {
         inputRef={input}
         onKirim={kirim}
         solo={solo}
+        terkunci={terkunci}
       />
 
       <Umpan umpan={umpan} />

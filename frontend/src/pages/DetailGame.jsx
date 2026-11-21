@@ -98,7 +98,7 @@ export default function DetailGame() {
 
   if (memuat) {
     return (
-      <div className="mx-auto flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat detail game">
+      <div className="flex max-w-[640px] flex-col gap-5" aria-busy="true" aria-label="Memuat detail game">
         <HeaderDetail judul="Detail Game" kembaliKe="/riwayat" />
         <Skeleton className="h-24 rounded-[20px]" />
         <SkeletonBaris jumlah={5} />
@@ -107,7 +107,7 @@ export default function DetailGame() {
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-[640px]">
+      <div className="max-w-[640px]">
         <HeaderDetail judul="Detail Game" kembaliKe="/riwayat" />
         {error.status === 404 || error.status === 403 ? (
           <StateView keping="404" hot={0} judul="Game tidak ditemukan" pesan="Tautan ini mungkin salah atau riwayat game ini sudah dihapus." aksi={{ label: 'Ke riwayat', ke: '/riwayat', gelap: true }} />
@@ -122,7 +122,7 @@ export default function DetailGame() {
   const berjalan = game.status === 'berjalan';
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col gap-5">
+    <div className="flex max-w-[640px] flex-col gap-5">
       <HeaderDetail
         judul="Detail Game"
         kembaliKe="/riwayat"

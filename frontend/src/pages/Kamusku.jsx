@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Lock, Search, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -7,39 +7,56 @@ import { pesanError } from '../api/axios.js';
 import { angka } from '../lib/format.js';
 import StateView from '../components/StateView.jsx';
 import Skeleton from '../components/Skeleton.jsx';
-import { JudulHalaman, Progres } from '../components/ui.jsx';
+import { JudulHalaman, Pil, Progres } from '../components/ui.jsx';
+import Paginasi from '../components/Paginasi.jsx';
+import { useHalamanUrl } from '../lib/useHalamanUrl.js';
+import { bacaKunjungan, idKataBaru, simpanKunjungan } from '../lib/kataBaru.js';
 
 const HURUF = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const LIMIT = 30;
+const GRID = 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 min-[1600px]:grid-cols-6';
 
-function KartuKata({ kata }) {
+const MAKS_BALIK = 6;
+
+function SisiTerkunci({ kata, className = '' }) {
+  return (
+    <div className={`flex h-[116px] flex-col items-center justify-center gap-1 rounded-[14px] border-[1.5px] border-dashed border-line-strong text-muted ${className}`} aria-hidden="true">
+      <Lock size={16} />
+      <span className="font-head text-lg font-bold tracking-widest">
+        {kata.huruf_awal}
+        {'?'.repeat(Math.min(kata.panjang - 1, 6))}
+      </span>
+      <span className="text-[11px]">{kata.panjang} huruf</span>
+    </div>
+  );
+}
+
+// baru: ter-unlock sejak kunjungan terakhir (pil "Baru"). urutanBalik: posisi animasi balik, null jika tidak dibalik.
+function KartuKata({ kata, baru = false, urutanBalik = null }) {
   if (kata.terkunci) {
     return (
-      <li
-        className="flex h-[116px] flex-col items-center justify-center gap-1 rounded-[14px] border-[1.5px] border-dashed border-line-strong text-muted"
-        aria-label={`Kata terkunci, diawali huruf ${kata.huruf_awal}, ${kata.panjang} huruf`}
-      >
-        <Lock size={16} aria-hidden="true" />
-        <span className="font-head text-lg font-bold tracking-widest" aria-hidden="true">
-          {kata.huruf_awal}
-          {'?'.repeat(Math.min(kata.panjang - 1, 6))}
-        </span>
-        <span className="text-[11px]" aria-hidden="true">
-          {kata.panjang} huruf
-        </span>
+      <li aria-label={`Kata terkunci, diawali huruf ${kata.huruf_awal}, ${kata.panjang} huruf`}>
+        <SisiTerkunci kata={kata} />
       </li>
     );
   }
+  const balik = urutanBalik !== null;
   return (
-    <li>
+    <li className="perspective-[800px]">
+      <div className={`relative transform-3d ${balik ? 'animate-balik' : ''}`} style={balik ? { animationDelay: `${urutanBalik * 80}ms` } : undefined}>
       <Link
         to={`/kamus/${kata.id}`}
-        className="flex h-[116px] flex-col gap-1 overflow-hidden rounded-[14px] border border-line-strong bg-surface p-3.5 transition-colors hover:border-ink"
+        className="keping-tekan flex h-[116px] flex-col gap-1 overflow-hidden rounded-[14px] border border-line-strong bg-surface p-3.5 backface-hidden hover:border-ink"
       >
-        <span className="font-head text-xl font-bold">{kata.kata}</span>
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 truncate font-head text-xl font-bold">{kata.kata}</span>
+          {baru && <Pil className="shrink-0 bg-accent-soft text-accent">Baru</Pil>}
+        </span>
         <span className="text-[11px] text-accent italic">{kata.jenis}</span>
         <span className="line-clamp-2 text-xs leading-snug text-muted">{kata.makna}</span>
       </Link>
+      {balik && <SisiTerkunci kata={kata} className="absolute inset-0 rotate-y-180 bg-bg backface-hidden" />}
+      </div>
     </li>
   );
 }
@@ -51,11 +68,15 @@ export default function Kamusku() {
   const cari = params.get('cari') ?? '';
   const [ketik, setKetik] = useState(cari);
   const [hasil, setHasil] = useState({ data: [], meta: null, progres: null });
-  // Halaman selalu kembali ke 1 saat filter berubah (dihitung saat render, bukan lewat effect).
+  // Waktu kunjungan sebelumnya dibaca sekali; kartu yang sudah dibalik tidak dibalik lagi di kunjungan ini.
+  const [kunjunganLalu] = useState(() => bacaKunjungan(user.id));
+  const sudahDibalik = useRef(new Set());
+  const kunjunganDisimpan = useRef(false);
+  // Ganti huruf atau pencarian menghapus ?page=, jadi kembali ke halaman 1.
+  // Total halaman hanya dipakai untuk menjepit jika berasal dari filter yang sedang aktif;
+  // setelah tombol Back, hasil lama milik filter lain tidak boleh memindahkan halaman.
   const kunciFilter = `${huruf}|${cari}`;
-  const [posisi, setPosisi] = useState({ kunci: kunciFilter, halaman: 1 });
-  const halaman = posisi.kunci === kunciFilter ? posisi.halaman : 1;
-  const setHalaman = (fn) => setPosisi({ kunci: kunciFilter, halaman: fn(halaman) });
+  const [halaman, pindahHalaman] = useHalamanUrl(hasil.kunci === kunciFilter ? hasil.meta?.total_halaman : undefined);
   const [memuat, setMemuat] = useState(true);
   const [error, setError] = useState(null);
   const [percobaan, setPercobaan] = useState(0);
@@ -67,6 +88,7 @@ export default function Kamusku() {
       if (nilai === cari) return;
       setParams((p) => {
         const baru = new URLSearchParams(p);
+        baru.delete('page');
         if (nilai) baru.set('cari', nilai);
         else baru.delete('cari');
         return baru;
@@ -82,25 +104,33 @@ export default function Kamusku() {
     kamus(user.id, { huruf: huruf === 'semua' ? undefined : huruf, search: cari || undefined, page: halaman, limit: LIMIT })
       .then((r) => {
         if (batal) return;
-        setHasil((lama) => ({ ...r, data: halaman === 1 ? r.data : [...lama.data, ...r.data] }));
+        const baru = idKataBaru(r.data, kunjunganLalu, Infinity);
+        const balik = [...baru].filter((id) => !sudahDibalik.current.has(id)).slice(0, MAKS_BALIK);
+        balik.forEach((id) => sudahDibalik.current.add(id));
+        if (!kunjunganDisimpan.current) {
+          simpanKunjungan(user.id, new Date().toISOString());
+          kunjunganDisimpan.current = true;
+        }
+        setHasil({ ...r, kunci: `${huruf}|${cari}`, baru, balik });
       })
       .catch((err) => !batal && setError(pesanError(err)))
       .finally(() => !batal && setMemuat(false));
     return () => {
       batal = true;
     };
-  }, [user.id, huruf, cari, halaman, percobaan]);
+  }, [user.id, huruf, cari, halaman, percobaan, kunjunganLalu]);
 
   const pilihHuruf = (h) =>
     setParams((p) => {
       const baru = new URLSearchParams(p);
+      baru.delete('page');
       if (h === 'semua') baru.delete('huruf');
       else baru.set('huruf', h);
       return baru;
     });
 
   const { progres, meta, data } = hasil;
-  const awal = memuat && halaman === 1;
+  const awal = memuat;
   const kosongTotal = !awal && !error && progres?.terkumpul === 0 && !cari;
 
   return (
@@ -158,7 +188,7 @@ export default function Kamusku() {
           </div>
 
           {!cari && (
-            <div role="group" aria-label="Filter huruf awal" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+            <div role="group" aria-label="Filter huruf awal" className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
               {['semua', ...HURUF].map((h) => {
                 const aktif = huruf === h;
                 return (
@@ -191,7 +221,7 @@ export default function Kamusku() {
             </div>
           )}
 
-          {error && halaman === 1 ? (
+          {error ? (
             <StateView
               keping="OFF"
               hot={1}
@@ -200,8 +230,8 @@ export default function Kamusku() {
               aksi={{ label: 'Coba lagi', onClick: () => setPercobaan((n) => n + 1), gelap: true, error: true }}
             />
           ) : awal ? (
-            <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4" aria-busy="true" aria-label="Memuat kata">
-              {Array.from({ length: 6 }, (_, i) => (
+            <ul className={GRID} aria-busy="true" aria-label="Memuat kata">
+              {Array.from({ length: 12 }, (_, i) => (
                 <li key={i}>
                   <Skeleton className="h-[116px] rounded-[14px]" />
                 </li>
@@ -216,21 +246,19 @@ export default function Kamusku() {
             />
           ) : (
             <>
-              <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+              <ul className={GRID}>
                 {data.map((k) => (
-                  <KartuKata key={k.id} kata={k} />
+                  <KartuKata key={k.id} kata={k} baru={hasil.baru?.has(k.id)} urutanBalik={hasil.balik?.includes(k.id) ? hasil.balik.indexOf(k.id) : null} />
                 ))}
               </ul>
-              {error && <p role="alert" className="text-center text-[13px] font-semibold text-accent">{error}</p>}
-              {meta && halaman < meta.total_halaman && (
-                <button
-                  type="button"
-                  onClick={() => setHalaman((h) => h + 1)}
-                  disabled={memuat}
-                  className="mx-auto flex h-11 items-center rounded-[10px] border border-line-strong bg-surface px-5 text-sm font-bold hover:border-ink disabled:opacity-60"
-                >
-                  {memuat ? 'Memuat...' : 'Muat lebih banyak'}
-                </button>
+              {meta && (
+                <Paginasi
+                  halaman={halaman}
+                  totalHalaman={meta.total_halaman}
+                  onPindah={pindahHalaman}
+                  label="Halaman Kamusku"
+                  ringkasan={`${angka(meta.total)} kata`}
+                />
               )}
             </>
           )}

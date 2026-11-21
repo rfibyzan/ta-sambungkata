@@ -9,7 +9,7 @@ export function AppLayout() {
     <WajibLogin>
       <BottomNav />
       <div className="sm:pl-24 lg:pl-58">
-        <main className="mx-auto w-full max-w-[1100px] px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 sm:pb-10 lg:px-12">
+        <main className="w-full px-4 pt-4 pb-[calc(96px+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 sm:pb-10 lg:px-12">
           <Outlet />
         </main>
       </div>

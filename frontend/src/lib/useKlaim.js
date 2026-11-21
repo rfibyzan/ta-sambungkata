@@ -4,10 +4,13 @@ import { pesanError } from '../api/axios.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 // Klaim quest lalu perbarui daftar quest dan data user (XP, level, streak).
-export function useKlaim(setData) {
+// onHadiah: opsional, untuk induk yang menampilkan bar XP di luar komponen pemanggil.
+export function useKlaim(setData, onHadiah) {
   const { setUser } = useAuth();
   const [mengklaim, setMengklaim] = useState(null);
   const [pesan, setPesan] = useState(null);
+  // hadiah memicu lencana +XP; kunci baru memutar ulang animasinya.
+  const [hadiah, setHadiah] = useState(null);
 
   async function klaim(quest) {
     setMengklaim(quest.id);
@@ -26,6 +29,9 @@ export function useKlaim(setData) {
       if (hasil.naik_level) teks += ` Naik ke level ${hasil.level}!`;
       if (hasil.streak_bertambah) teks += ` Streak ${hasil.streak} hari.`;
       setPesan({ jenis: 'sukses', teks });
+      const h = { xp: hasil.xp_didapat, kunci: Date.now() };
+      setHadiah(h);
+      onHadiah?.(h);
     } catch (err) {
       setPesan({ jenis: 'error', teks: pesanError(err) });
     } finally {
@@ -33,5 +39,5 @@ export function useKlaim(setData) {
     }
   }
 
-  return { klaim, mengklaim, pesan };
+  return { klaim, mengklaim, pesan, hadiah };
 }
