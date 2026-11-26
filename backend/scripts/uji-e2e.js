@@ -106,8 +106,12 @@ try {
   const terpakaiBot = [bot.data.kata_pembuka.kata];
   let aw = bot.data.game.awalan_berikutnya;
   let menang = false;
+  // Server menolak kiriman selama kata bot belum selesai tampil (409), jadi tunggu jeda_ms dulu.
+  let jedaBot = 0;
+  const tungguBot = () => new Promise((r) => setTimeout(r, jedaBot ? jedaBot + 300 : 0));
   for (let i = 0; i < 40 && !menang; i++) {
     const kata = await jawabanBenar(aw, terpakaiBot);
+    await tungguBot();
     const r = await api('POST', `/games/${bid}/moves`, { kata });
     if (!r.data.valid) { cek('bot: jawaban valid', false, `${kata} ${r.data.pesan}`); break; }
     terpakaiBot.push(kata);
@@ -116,11 +120,20 @@ try {
       terpakaiBot.push(r.data.balasan_bot.kata.kata);
       if (r.data.balasan_bot.kata_acak_baru) terpakaiBot.push(r.data.balasan_bot.kata_acak_baru.kata);
     }
-    if (i === 0) cek('bot membalas', Boolean(r.data.balasan_bot), r.data.balasan_bot?.kata?.kata);
+    jedaBot = r.data.balasan_bot?.jeda_ms ?? 0;
+    if (i === 0) {
+      cek('bot membalas', Boolean(r.data.balasan_bot), `${r.data.balasan_bot?.kata?.kata}, jeda ${jedaBot} ms`);
+      // Kiriman langsung saat bot masih "berpikir": ditolak tanpa penalti nyawa.
+      if (jedaBot) {
+        const terlaluCepat = await api('POST', `/games/${bid}/moves`, { kata: 'xxxx' });
+        cek('bot: kirim selama jeda ditolak 409', terlaluCepat.status === 409, terlaluCepat.data.error);
+      }
+    }
     if (r.data.bot_menyerah) { menang = true; cek('bot kehabisan kata, pemain menang', r.data.game.status === 'menang', `setelah ${i + 1} giliran, skor ${r.data.game.skor}`); }
     aw = r.data.game.awalan_berikutnya;
   }
   if (!menang) {
+    await tungguBot();
     const salahBot = await api('POST', `/games/${bid}/moves`, { kata: 'xxxx' });
     cek('bot: salah mengurangi nyawa', salahBot.data.game.nyawa === 2);
     const nyerah = await api('PUT', `/games/${bid}`, { aksi: 'menyerah' });
